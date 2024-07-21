@@ -1,0 +1,6 @@
+predict_position/logs
+predict_position/wandb
+training/logs
+training/wandb
+__pycache__
+.vscode/
