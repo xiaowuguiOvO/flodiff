@@ -11,11 +11,13 @@ from efficientnet_pytorch import EfficientNet
 class flona(nn.Module):
     def __init__(self, vision_encoder, 
                        noise_pred_net,
-                       dist_pred_net):
+                       dist_pred_net,
+                       pos_ori_pred_net):
         super(flona, self).__init__()
         self.vision_encoder = vision_encoder
         self.noise_pred_net = noise_pred_net
         self.dist_pred_net = dist_pred_net
+        self.pos_ori_pred_net = pos_ori_pred_net
        
     def forward(self, func_name, **kwargs):
         if func_name == "vision_encoder" :
@@ -24,6 +26,8 @@ class flona(nn.Module):
             output = self.noise_pred_net(sample=kwargs["sample"], timestep=kwargs["timestep"], global_cond=kwargs["global_cond"])
         elif func_name == "dist_pred_net":
             output = self.dist_pred_net(kwargs["obsgoal_cond"])
+        elif func_name == "pos_ori_pred_net":
+            output = self.pos_ori_pred_net(kwargs["obsgoal_cond"])
         else:
             raise NotImplementedError
         return output

@@ -572,6 +572,10 @@ def execute_model(
     
     # actions = actions.squeeze(0)
     distance = model_output_dict['distance']
+    pos_ori = model_output_dict['pos_ori']
+    print('pos_ori shape ', pos_ori.shape)
+    print(pos_ori.mean(dim=0))
+    print('gt ', cur_pos, cur_heading )
     actions_normed_global = to_global_coords(to_numpy(actions), to_numpy(cur_pos).squeeze(0), to_numpy(cur_heading).squeeze(0))
     actions_meter_global = actions_normed_global * metric_waipoint_spacing * waypoint_spacing
     
@@ -585,14 +589,14 @@ def execute_model(
         ax4 = plt.subplot(gs[2:, 3:])
         
         goal_pos_metric = goal_pos * metric_waipoint_spacing * waypoint_spacing
-        end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + 1400 / 2.0)).astype(int)
-        start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + 1400 / 2.0)).astype(int)
+        end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + 1600 / 2.0)).astype(int)
+        start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + 1600 / 2.0)).astype(int)
         floorplan_ary[max(0, end_xy[0]-5) : min(end_xy[0]+5, floorplan_ary.shape[0]), max(0, end_xy[1]-5) : min(end_xy[1]+5, floorplan_ary.shape[1]), :] = np.array([0, 0, 255, 255])
         
         ax1.imshow(cur_obs[-1].permute(1,2,0).cpu().detach().numpy())
         ax2.plot(save_action[:,0], save_action[:,1], marker = '.')
         for i, xy in enumerate(actions_meter_global):
-            map_xy = np.flip((np.array(xy) / 0.01 + 1400 / 2.0)).astype(int)
+            map_xy = np.flip((np.array(xy) / 0.01 + 1600 / 2.0)).astype(int)
             if i == 0:
                 start_xy = map_xy
             if i < 8:
@@ -664,9 +668,10 @@ def model_output(
     device: torch.device,
 ):
 
-    obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos=curr_pos, goal_pos=goal_pos, obs_ori = curr_ori, input_goal_mask=None)
+    obsgoal_cond, obsgoal_cond_fused = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos=curr_pos, goal_pos=goal_pos, obs_ori = curr_ori, input_goal_mask=None)
     # obsgoal_cond = obsgoal_cond.flatten(start_dim=1)  
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
+    obsgoal_cond_fused = obsgoal_cond_fused.repeat_interleave(num_samples, dim=0)
 
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
@@ -680,7 +685,7 @@ def model_output(
             "noise_pred_net",
             sample=diffusion_output,
             timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=obsgoal_cond
+            global_cond=obsgoal_cond_fused
         )
 
         # inverse diffusion step (remove noise)
@@ -691,11 +696,13 @@ def model_output(
         ).prev_sample
 
     actions = get_action(diffusion_output, ACTION_STATS)
-    distance = model("dist_pred_net", obsgoal_cond=obsgoal_cond)
+    distance = model("dist_pred_net", obsgoal_cond=obsgoal_cond_fused)
+    pos_ori = model("pos_ori_pred_net", obsgoal_cond=obsgoal_cond)
 
     return {
         'actions': actions,
         'distance': distance,
+        'pos_ori': pos_ori
     }
 
 

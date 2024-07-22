@@ -4,3 +4,4 @@ training/logs
 training/wandb
 __pycache__
 .vscode/
+diffusion_policy/

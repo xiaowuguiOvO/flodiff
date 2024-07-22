@@ -48,7 +48,7 @@ class flona_ViNT(nn.Module):
 
         self.obs_goal_enc = nn.Linear(4, obs_encoding_size,device="cuda")
         self.obs_goal_expand = nn.Linear(6, obs_encoding_size,device="cuda")
-        self.obs_goal_pos_ori_enc = nn.Linear(obs_encoding_size + 6, obs_encoding_size) # jinan
+        self.obs_goal_pos_ori_enc = nn.Linear(obs_encoding_size + 2, obs_encoding_size) # jinan
         # Initialize the observation encoder
         if obs_encoder.split("-")[0] == "efficientnet":
             self.obs_encoder = EfficientNet.from_name(obs_encoder, in_channels=3) # context
@@ -97,10 +97,11 @@ class flona_ViNT(nn.Module):
     def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, obs_pos: torch.tensor, goal_pos: torch.tensor, obs_ori: torch.tensor, input_goal_mask: torch.tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
 
         device = obs_img.device
-        obs_goal_pos = torch.cat([obs_pos, goal_pos], dim=1)
+        # obs_goal_pos = torch.cat([obs_pos, goal_pos], dim=1)
         # obs_goal_pos_ori = torch.cat([obs_goal_pos, obs_ori], dim=1).to(device) # jinan
-        obs_goal_pos_ori = torch.cat([obs_goal_pos, obs_ori - obs_pos], dim=1).to(device)
-        obs_goal_pos_ori = self.obs_goal_expand(obs_goal_pos_ori) # v100new
+        # obs_goal_pos_ori = torch.cat([obs_goal_pos, obs_ori - obs_pos], dim=1).to(device)
+        # obs_goal_pos_ori = self.obs_goal_expand(obs_goal_pos_ori) # v100new
+        obs_goal_pos_ori = goal_pos.to(device)
         # Initialize the goal encoding
         # goal_encoding = torch.zeros((obs_img.size()[0], 1, self.goal_encoding_size)).to(device)
         
@@ -154,10 +155,10 @@ class flona_ViNT(nn.Module):
             avg_mask = torch.index_select(self.avg_pool_mask.to(device), 0, no_goal_mask).unsqueeze(-1)
             obs_encoding_tokens = obs_encoding_tokens * avg_mask
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-        obs_encoding_tokens = torch.cat([obs_encoding_tokens, obs_goal_pos_ori], dim=1)
-        # obs_encoding_tokens = self.obs_goal_pos_ori_enc(obs_encoding_tokens) # jinan
+        obs_encoding_tokens_fused = torch.cat([obs_encoding_tokens, obs_goal_pos_ori], dim=1)
+        obs_encoding_tokens_fused = self.obs_goal_pos_ori_enc(obs_encoding_tokens_fused) # jinan
         # obs_encoding_tokens = obs_encoding_tokens + obs_goal_pos
-        return obs_encoding_tokens
+        return obs_encoding_tokens, obs_encoding_tokens_fused 
 
 
 
