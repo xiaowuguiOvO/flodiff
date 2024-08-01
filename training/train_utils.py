@@ -589,14 +589,15 @@ def execute_model(
         ax4 = plt.subplot(gs[2:, 3:])
         
         goal_pos_metric = goal_pos * metric_waipoint_spacing * waypoint_spacing
-        end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + 1600 / 2.0)).astype(int)
-        start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + 1600 / 2.0)).astype(int)
+        floor_width = floorplan_ary.shape[0]
+        end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
+        start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
         floorplan_ary[max(0, end_xy[0]-5) : min(end_xy[0]+5, floorplan_ary.shape[0]), max(0, end_xy[1]-5) : min(end_xy[1]+5, floorplan_ary.shape[1]), :] = np.array([0, 0, 255, 255])
         
         ax1.imshow(cur_obs[-1].permute(1,2,0).cpu().detach().numpy())
         ax2.plot(save_action[:,0], save_action[:,1], marker = '.')
         for i, xy in enumerate(actions_meter_global):
-            map_xy = np.flip((np.array(xy) / 0.01 + 1600 / 2.0)).astype(int)
+            map_xy = np.flip((np.array(xy) / 0.01 + floor_width / 2.0)).astype(int)
             if i == 0:
                 start_xy = map_xy
             if i < 8:
