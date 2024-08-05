@@ -672,7 +672,7 @@ def model_output(
     obsgoal_cond, obsgoal_cond_fused = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos=curr_pos, goal_pos=goal_pos, obs_ori = curr_ori, input_goal_mask=None)
     # obsgoal_cond = obsgoal_cond.flatten(start_dim=1)  
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
-    # obsgoal_cond_fused = obsgoal_cond_fused.repeat_interleave(num_samples, dim=0)
+    obsgoal_cond_fused = obsgoal_cond_fused.repeat_interleave(num_samples, dim=0)
 
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
