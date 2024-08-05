@@ -572,10 +572,10 @@ def execute_model(
     
     # actions = actions.squeeze(0)
     distance = model_output_dict['distance']
-    pos_ori = model_output_dict['pos_ori']
-    print('pos_ori shape ', pos_ori.shape)
-    print(pos_ori.mean(dim=0))
-    print('gt ', cur_pos, cur_heading )
+    # pos_ori = model_output_dict['pos_ori']
+    # print('pos_ori shape ', pos_ori.shape)
+    # print(pos_ori.mean(dim=0))
+    # print('gt ', cur_pos, cur_heading )
     actions_normed_global = to_global_coords(to_numpy(actions), to_numpy(cur_pos).squeeze(0), to_numpy(cur_heading).squeeze(0))
     actions_meter_global = actions_normed_global * metric_waipoint_spacing * waypoint_spacing
     
@@ -672,7 +672,7 @@ def model_output(
     obsgoal_cond, obsgoal_cond_fused = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos=curr_pos, goal_pos=goal_pos, obs_ori = curr_ori, input_goal_mask=None)
     # obsgoal_cond = obsgoal_cond.flatten(start_dim=1)  
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
-    obsgoal_cond_fused = obsgoal_cond_fused.repeat_interleave(num_samples, dim=0)
+    # obsgoal_cond_fused = obsgoal_cond_fused.repeat_interleave(num_samples, dim=0)
 
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
@@ -698,12 +698,12 @@ def model_output(
 
     actions = get_action(diffusion_output, ACTION_STATS)
     distance = model("dist_pred_net", obsgoal_cond=obsgoal_cond_fused)
-    pos_ori = model("pos_ori_pred_net", obsgoal_cond=obsgoal_cond)
+    # pos_ori = model("pos_ori_pred_net", obsgoal_cond=obsgoal_cond)
 
     return {
         'actions': actions,
         'distance': distance,
-        'pos_ori': pos_ori
+        # 'pos_ori': pos_ori
     }
 
 
