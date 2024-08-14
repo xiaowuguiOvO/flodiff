@@ -505,7 +505,9 @@ def evaluate_nomad(
 def execute_model(
     ema_model: EMAModel,
     cur_pos: np.ndarray,        # np.array (1,2)   
-    cur_heading: np.ndarray,    # np.array (1,2)        
+    cur_heading: np.ndarray,    # np.array (1,2)
+    cur_pos_f3: np.ndarray, # np.array (1,3)      
+    cur_heading_f3: np.ndarray, # np.array (1,3)  
     goal_pos: np.ndarray,       # np.array (1,2)
     # img_paths: List[str],       # list of image paths
     # floorplan_path: str,        # floorplan path
@@ -550,6 +552,9 @@ def execute_model(
     batch_cur_obss = torch.cat(batch_cur_obss, dim=1).to(device)  # (1,3*L,h,w)
     batch_floorplan = transform(floorplan).to(device)  # (1,3,h,w)
     
+    cur_pos_f3 = torch.as_tensor(cur_pos_f3, dtype=torch.float32)
+    cur_heading_f3 = torch.as_tensor(cur_heading_f3, dtype=torch.float32)
+    
     # _, cur_pos_resized, goal_pos_resized, cur_ori_resized = img_path_to_data_and_point_transfer('/home/user/data/vis_nav/iGibson/igibson/dataset/Quantico_220/train/Quantico/traj_127/00072.png', (96, 96), cur_pos[0], goal_pos[0], cur_heading[0])
     # cur_pos_i = torch.tensor(np.array([cur_pos_resized]))
     # goal_pos_i = torch.tensor(np.array([goal_pos_resized]))
@@ -564,8 +569,8 @@ def execute_model(
         2,
         30,
         goal_pos,
-        cur_pos,
-        cur_heading,
+        cur_pos_f3,
+        cur_heading_f3,
         device=device,
     )
     actions = model_output_dict['actions'].mean(dim=0)  # [1,8,2]
@@ -578,6 +583,12 @@ def execute_model(
     # print('gt ', cur_pos, cur_heading )
     actions_normed_global = to_global_coords(to_numpy(actions), to_numpy(cur_pos).squeeze(0), to_numpy(cur_heading).squeeze(0))
     actions_meter_global = actions_normed_global * metric_waipoint_spacing * waypoint_spacing
+    
+    
+    # if f3
+    # actions_meter_global_transformed = actions_meter_global.copy()
+    # for i in range(actions_meter_global.shape[0]):
+    #     actions_meter_global_transformed[i] = actions_meter_global[i] - actions_meter_global[0] + cur_pos.squeeze(0)
     
     if log_add is not None:
         save_action = actions.cpu().detach().numpy()
