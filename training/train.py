@@ -166,11 +166,11 @@ def main(config):
 
     noise_pred_net = ConditionalUnet1D(
             input_dim=2,
-            global_cond_dim=config["encoding_size"]*2,    # +6
+            global_cond_dim=config["encoding_size"],    # +6
             down_dims=config["down_dims"],
             cond_predict_scale=config["cond_predict_scale"],
         )
-    dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"]*2)   # +6
+    dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])   # +6
     
     model = flona(
         vision_encoder=vision_encoder,
