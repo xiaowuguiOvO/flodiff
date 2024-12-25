@@ -139,7 +139,7 @@ def train_nomad(
     """
     model.train()
     num_batches = len(dataloader)
-
+    
     action_loss_logger = Logger("action_loss", "train", window_size=print_log_freq)
     action_waypts_cos_sim_logger = Logger(
         "action_waypts_cos_sim", "train", window_size=print_log_freq
@@ -154,6 +154,7 @@ def train_nomad(
         "multi_action_waypts_cos_sim": multi_action_waypts_cos_sim_logger,
         "dist_loss": dist_loss_logger,
     }
+   
     with tqdm.tqdm(dataloader, desc="Train Batch", leave=False) as tepoch:
         for i, data in enumerate(tepoch):
             (
@@ -191,10 +192,12 @@ def train_nomad(
                 batch_viz_goal_images[b,:,int(curr_ori_resized[b,1]), int(curr_ori_resized[b,0])] = torch.tensor(CYAN)
 
             B = actions.shape[0]
-
+            # print("actionsshape",actions.shape)    
             # Generate random goal mask
+            goal_mask_prob = 1.01                    #==============modified by weiqi========
+            goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)        #==============modified by weiqi========
             # obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos = curr_pos, goal_pos = goal_pos, obs_ori = curr_ori, input_goal_mask=None)
-            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos = curr_pos, goal_pos = goal_pos, obs_ori = curr_ori, input_goal_mask=None)
+            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos = curr_pos, goal_pos = goal_pos, obs_ori = curr_ori, input_goal_mask=goal_mask )        #==============modified by weiqi========
             
             # Get distance label
             distance = distance.float().to(device)
@@ -221,7 +224,7 @@ def train_nomad(
                 naction, noise, timesteps)
             # Predict the noise residual
             noise_pred = model("noise_pred_net", sample=noisy_action, timestep=timesteps, global_cond=obsgoal_cond)
-
+            
             def action_reduce(unreduced_loss: torch.Tensor):
                 # Reduce over non-batch dimensions to get loss per batch element
                 while unreduced_loss.dim() > 1:
@@ -403,11 +406,10 @@ def evaluate_nomad(
             B = actions.shape[0]
 
             # Generate random goal mask
-            # rand_goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
-            # goal_mask = torch.ones_like(rand_goal_mask).long().to(device)
-            # no_mask = torch.zeros_like(rand_goal_mask).long().to(device)
+            goal_mask_prob = 1.01
+            goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)     #==============modified by weiqi========
 
-            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos = curr_pos, goal_pos = goal_pos, obs_ori = curr_ori, input_goal_mask=None)
+            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos = curr_pos, goal_pos = goal_pos, obs_ori = curr_ori, input_goal_mask=goal_mask)
             obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
 
             
@@ -503,6 +505,97 @@ def evaluate_nomad(
                 )
 
 def execute_model(
+    model: nn.Module,
+    cur_obs: torch.Tensor,  
+    cur_pos: torch.Tensor,
+    cur_heading: torch.Tensor,
+    goal_pos: torch.Tensor,
+    shortest_actions: torch.Tensor,
+    depth_latent: torch.Tensor, 
+    metric_waipoint_spacing: float,
+    waypoint_spacing: float,
+    device: torch.device,
+    noise_scheduler: DDPMScheduler,
+    floorplan_ary: np.ndarray,  
+    log_add: str = None,
+):
+    """
+    Execute the model on the given data.
+    Args:
+        ema_model: exponential moving average model
+        cur_pos: current position
+        goal_pos: goal position
+        # img_paths: list of image paths
+        # floorplan_path: floorplan path
+        cur_obs: current observation
+        floorplan: floorplan
+        transform: transform to apply to images
+        device: device to use for evaluation
+        noise_scheduler: noise scheduler to evaluate with 
+        log_folder: folder to save images to
+    """
+    model.eval()
+
+    depth_cond = model("depth_latent_processor", depth_latent=depth_latent)
+    depth_cond = depth_cond.repeat_interleave(30, dim=0)
+    shortest_actions = shortest_actions.repeat_interleave(30, dim=0)
+    pred_horizon, action_dim = shortest_actions.shape[1], shortest_actions.shape[2]
+
+    print("shape of depth_cond:", depth_cond.shape)
+    model_output_dict = model_output(
+        model,
+        noise_scheduler,
+        depth_cond,
+        shortest_actions,
+        pred_horizon,
+        action_dim,
+        device=device,
+    )
+    actions = model_output_dict['actions'].mean(dim=0)  # [1,8,2]
+    cur_pos = torch.from_numpy(cur_pos).to(device) 
+    cur_heading = torch.from_numpy(cur_heading).to(device)
+    actions = actions * metric_waipoint_spacing * waypoint_spacing
+    actions_meter_global = to_global_coords(to_numpy(actions), to_numpy(cur_pos).squeeze(0), to_numpy(cur_heading).squeeze(0))
+    
+    
+    
+    if log_add is not None:
+        save_action = actions.cpu().detach().numpy()
+        gs = gridspec.GridSpec(6, 6)
+        gs.update(wspace = 0.9, hspace = 0.7)
+        ax1 = plt.subplot(gs[:2, :2])
+        ax2 = plt.subplot(gs[:2, 2:])
+        ax3 = plt.subplot(gs[2:, :3])
+        ax4 = plt.subplot(gs[2:, 3:])
+        
+        goal_pos_metric = goal_pos 
+        floor_width = floorplan_ary.shape[0]
+        end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
+        start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
+        floorplan_ary[max(0, end_xy[0]-5) : min(end_xy[0]+5, floorplan_ary.shape[0]), max(0, end_xy[1]-5) : min(end_xy[1]+5, floorplan_ary.shape[1]), :] = np.array([0, 0, 255, 255])
+        
+        ax1.imshow(cur_obs[-1].permute(1,2,0).cpu().detach().numpy())
+        ax2.plot(save_action[:,0], save_action[:,1], marker = '.')
+        for i, xy in enumerate(actions_meter_global):
+            map_xy = np.flip((np.array(xy) / 0.01 + floor_width / 2.0)).astype(int)
+            if i == 0:
+                start_xy = map_xy
+            if i < 8:
+                color = np.array([255, 0, 0, 255])
+                floorplan_ary[map_xy[0]-2 : map_xy[0]+2, map_xy[1]-2 : map_xy[1]+2, :] = color
+            else:
+                color = np.array([0, 255, 0, 30])
+                floorplan_ary[map_xy[0]-1 : map_xy[0]+1, map_xy[1]-1 : map_xy[1]+1, :] = color
+            
+        ax3.imshow(floorplan_ary[max(0, start_xy[0]-200) : min(start_xy[0]+200, floorplan_ary.shape[0]), max(0, start_xy[1]-200) : min(start_xy[1]+200, floorplan_ary.shape[1]), :])
+        ax4.imshow(floorplan_ary)
+        # plt.plot(actions_meter_global[:,0], actions_meter_global[:,1], marker = 'o')
+        plt.savefig(os.path.join(log_add))
+    
+    return actions_meter_global
+    
+
+def execute_model_bak(
     ema_model: EMAModel,
     cur_pos: np.ndarray,        # np.array (1,2)   
     cur_heading: np.ndarray,    # np.array (1,2)
@@ -665,8 +758,43 @@ def get_action(diffusion_output, action_stats=ACTION_STATS):
     actions = np.cumsum(ndeltas, axis=1)
     return from_numpy(actions).to(device)
 
-
 def model_output(
+    model: nn.Module,
+    noise_scheduler: DDPMScheduler,
+    depth_cond: torch.Tensor,
+    shortest_actions: torch.Tensor, 
+    pred_horizon: int,
+    action_dim: int,
+    device: torch.device,
+):
+    noisy_diffusion_output = torch.randn(
+        (depth_cond.shape[0], pred_horizon, action_dim)).to("cuda:0")
+    diffusion_output = noisy_diffusion_output
+    print("shape of shortest_actions:", shortest_actions.shape) 
+    for k in noise_scheduler.timesteps[:]:
+        # predict noise
+        noise_pred = model(
+            "noise_pred_net",
+            sample=diffusion_output,
+            timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to("cuda:0"),
+            global_cond=depth_cond,
+            local_cond = shortest_actions
+        )
+
+        # inverse diffusion step (remove noise)
+        diffusion_output = noise_scheduler.step(
+            model_output=noise_pred,
+            timestep=k,
+            sample=diffusion_output
+        ).prev_sample
+
+    actions = get_action(diffusion_output, ACTION_STATS)  
+
+    return {
+        'actions': actions
+    }
+
+def model_output_bak(
     model: nn.Module,
     noise_scheduler: DDPMScheduler,
     batch_obs_images: torch.Tensor,
@@ -679,15 +807,16 @@ def model_output(
     curr_ori: torch.Tensor,
     device: torch.device,
 ):
-
-    obsgoal_cond, obsgoal_cond_fused = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos=curr_pos, goal_pos=goal_pos, obs_ori = curr_ori, input_goal_mask=None)
+    goal_mask_prob = 1.01   
+    goal_mask = (torch.rand((batch_obs_images.shape[0],)) < goal_mask_prob).long().to(device)        #==============modified by weiqi========
+    obsgoal_cond_fused = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, obs_pos=curr_pos, goal_pos=goal_pos, obs_ori = curr_ori, input_goal_mask=goal_mask)  #==============modified by weiqi========
     # obsgoal_cond = obsgoal_cond.flatten(start_dim=1)  
-    obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
+    # obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
     obsgoal_cond_fused = obsgoal_cond_fused.repeat_interleave(num_samples, dim=0)
 
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
-        (len(obsgoal_cond), pred_horizon, action_dim), device=device)
+        (len(obsgoal_cond_fused), pred_horizon, action_dim), device=device)
     diffusion_output = noisy_diffusion_output
 
 

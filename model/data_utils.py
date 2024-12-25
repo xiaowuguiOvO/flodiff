@@ -10,15 +10,19 @@ import torch.nn.functional as F
 import io
 from typing import Union
 
-VISUALIZATION_IMAGE_SIZE = (160, 120)
+import time
+
+VISUALIZATION_IMAGE_SIZE = (160, 160)
 IMAGE_ASPECT_RATIO = (
-    4 / 3
+    1 / 1
 )  # all images are centered cropped to a 4:3 aspect ratio in training
 
 
 
+
+
 def get_data_path(data_folder: str, f: str, name):
-    if type(name) == int:
+    if type(name) == int or type(name) == np.int16:
         return os.path.join(data_folder, f, "{:05d}.png".format(name))
     elif type(name) == str:
         return os.path.join(data_folder, f, name + ".png") 
@@ -36,7 +40,7 @@ def yaw_rotmat(yaw: float) -> np.ndarray:
     )
 
 
-def to_local_coords(            # 以当前点为坐标原点，当前点方向为x正方向，计算其他点的坐标
+def to_local_coords(            
     positions: np.ndarray, curr_pos: np.ndarray, curr_yaw
 ) -> np.ndarray:
     """
@@ -63,7 +67,7 @@ def to_local_coords(            # 以当前点为坐标原点，当前点方向�
 
     return (positions - curr_pos).dot(rotmat)
 
-def to_global_coords(            # 以当前点为坐标原点，当前点方向为x正方向，计算其他点的坐标
+def to_global_coords(           
     positions: np.ndarray, curr_pos: np.ndarray, curr_yaw
 ) -> np.ndarray:
     """
@@ -130,7 +134,7 @@ def transform_images(
 ):
     w, h = img.size
     if w > h:
-        img = TF.center_crop(img, (h, int(h * aspect_ratio)))  # crop to the right ratio
+        img = TF.center_crop(img, (h, int(h * aspect_ratio)))  
     else:
         img = TF.center_crop(img, (int(w / aspect_ratio), w))
     viz_img = img.resize(VISUALIZATION_IMAGE_SIZE)
@@ -145,7 +149,7 @@ def resize_and_aspect_crop(
 ):
     w, h = img.size
     if w > h:
-        img = TF.center_crop(img, (h, int(h * aspect_ratio)))  # crop to the right ratio
+        img = TF.center_crop(img, (h, int(h * aspect_ratio)))  
     else:
         img = TF.center_crop(img, (int(w / aspect_ratio), w))
     img = img.resize(image_resize_size)
@@ -165,7 +169,7 @@ def img_path_to_data(path: Union[str, io.BytesIO], image_resize_size: Tuple[int,
     # return transform_images(Image.open(path), transform, image_resize_size, aspect_ratio)
     return resize_and_aspect_crop(Image.open(path), image_resize_size)    
 
-def img_path_to_data_and_point_transfer(path: Union[str, io.BytesIO], image_resize_size: Tuple[int, int], cur_pos: np.ndarray, goal_pos: np.ndarray, cur_ori: np.ndarray) -> Tuple[torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
+def img_path_to_data_and_point_transfer(path: Union[str, io.BytesIO], ori_size: float, image_resize_size: Tuple[int, int], cur_pos: np.ndarray, goal_pos: np.ndarray, cur_ori: np.ndarray) -> Tuple[torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
     """
     Load an image and two points, transform the image and transfer the points to local coordinates
     Args:
@@ -176,49 +180,20 @@ def img_path_to_data_and_point_transfer(path: Union[str, io.BytesIO], image_resi
     Returns:
         Tuple[torch.Tensor, np.ndarray, np.ndarray]: resized image as tensor, current position in the transformed image size coordinate, goal position in the same coordinate
     """
+    
     with Image.open(path) as img:
+        w0 = ori_size
+        h0 = ori_size
         w, h = img.size
-        x = float(cur_pos[0]) / 0.01 + w / 2
-        y = float(cur_pos[1]) / 0.01 + h / 2
-        cur_pos_in_oriSize = np.array([x, y])
-        x = float(goal_pos[0]) / 0.01 + w / 2
-        y = float(goal_pos[1]) / 0.01 + h / 2
-        goal_pos_in_oriSize = np.array([x, y])
-        x = float(cur_ori[0]) / 0.01 + w / 2
-        y = float(cur_ori[1]) / 0.01 + h / 2
-        cur_ori_in_oriSize = np.array([x, y])
+        cur_pos = cur_pos * 100 + np.array([w0 / 2, h0 / 2])
+        goal_pos = goal_pos * 100 + np.array([w0 / 2, h0 / 2])
+        cur_ori = cur_ori * 100 + np.array([w0 / 2, h0 / 2])      
         aspect_ratio = IMAGE_ASPECT_RATIO
-        
-        if w > h:
-            img = TF.center_crop(img, (h, int(h * aspect_ratio)))  # crop to the right ratio
-            w1, h1 = img.size
-            cur_pos_in_cropSize = cur_pos_in_oriSize.copy()
-            cur_pos_in_cropSize[0] = (w1 - w) // 2 + cur_pos_in_oriSize[0]
-            goal_pos_in_cropSize = goal_pos_in_oriSize.copy()
-            goal_pos_in_cropSize[0] = (w1 - w) // 2 + goal_pos_in_oriSize[0]
-            cur_ori_in_cropSize = cur_ori_in_oriSize.copy()
-            cur_ori_in_cropSize[0] = (w1 - w) // 2 + cur_ori_in_oriSize[0]
-        else:
-            img = TF.center_crop(img, (int(w / aspect_ratio), w))
-            w1, h1 = img.size
-            cur_pos_in_cropSize = cur_pos_in_oriSize.copy()
-            cur_pos_in_cropSize[1] = (h1 - h) // 2 + cur_pos_in_oriSize[1]
-            goal_pos_in_cropSize = goal_pos_in_oriSize.copy()
-            goal_pos_in_cropSize[1] = (h1 - h) // 2 + goal_pos_in_oriSize[1]
-            cur_ori_in_cropSize = cur_ori_in_oriSize.copy()
-            cur_ori_in_cropSize[1] = (h1 - h) // 2 + cur_ori_in_oriSize[1]
-            
-            
+                  
         img = img.resize(image_resize_size)
-        cur_pos_in_resizeSize = cur_pos_in_cropSize.copy()
-        cur_pos_in_resizeSize[0] = cur_pos_in_cropSize[0] * image_resize_size[0] / w1
-        cur_pos_in_resizeSize[1] = cur_pos_in_cropSize[1] * image_resize_size[1] / h1
-        goal_pos_in_resizeSize = goal_pos_in_cropSize.copy()
-        goal_pos_in_resizeSize[0] = goal_pos_in_cropSize[0] * image_resize_size[0] / w1
-        goal_pos_in_resizeSize[1] = goal_pos_in_cropSize[1] * image_resize_size[1] / h1
-        cur_ori_in_resizeSize = cur_ori_in_cropSize.copy()
-        cur_ori_in_resizeSize[0] = cur_ori_in_cropSize[0] * image_resize_size[0] / w1
-        cur_ori_in_resizeSize[1] = cur_ori_in_cropSize[1] * image_resize_size[1] / h1
+        cur_pos_in_resizeSize = cur_pos * image_resize_size[0] / w0
+        goal_pos_in_resizeSize = goal_pos * image_resize_size[0] / w0
+        cur_ori_in_resizeSize = cur_ori * image_resize_size[0] / w0       
         resize_img = TF.to_tensor(img)
-        return (resize_img, cur_pos_in_resizeSize.astype(int), goal_pos_in_resizeSize.astype(int), cur_ori_in_resizeSize.astype(int))
-
+        
+        return (resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize)

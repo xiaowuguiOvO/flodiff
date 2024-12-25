@@ -74,7 +74,7 @@ def main(config):
 
     train_dataset = flona_Dataset(
         data_folder=os.path.join(data_config["data_folder"], "train"),
-        scene_name="Quantico",
+        scene_names=data_config['scene_names'],
         image_size=config["image_size"],
         waypoint_spacing=data_config["waypoint_spacing"],
         len_traj_pred=config["len_traj_pred"],
@@ -88,7 +88,7 @@ def main(config):
     )
     test_dataset = flona_Dataset(
         data_folder=os.path.join(data_config["data_folder"], "test"),
-        scene_name="Quantico_t",
+        scene_names=data_config['scene_names'],
         image_size=config["image_size"],
         waypoint_spacing=data_config["waypoint_spacing"],
         len_traj_pred=config["len_traj_pred"],
@@ -234,7 +234,7 @@ def main(config):
                 after_scheduler=scheduler,
             )
 
-    current_epoch = 50
+    current_epoch = 2    #==================modified by weiqi  ======= 50 -> 0
 
     if "load_run" in config:
         load_project_folder = os.path.join("logs", config["load_run"])
@@ -283,7 +283,7 @@ def main(config):
 
 
 if __name__ == "__main__":
-    torch.multiprocessing.set_start_method("spawn")
+    # torch.multiprocessing.set_start_method("spawn")
 
     parser = argparse.ArgumentParser(description="Visual Navigation Transformer")
 
@@ -318,7 +318,7 @@ if __name__ == "__main__":
         wandb.init(
             project=config["project_name"],
             settings=wandb.Settings(start_method="fork"),
-            entity="ljxjiaxinli-Beijing Institute of Technology", # TODO: change this to your wandb entity
+            
         )
         wandb.save(args.config, policy="now")  # save the config file
         wandb.run.name = config["run_name"]
@@ -326,5 +326,5 @@ if __name__ == "__main__":
         if wandb.run:
             wandb.config.update(config)
 
-    print(config)
+    #print(config)
     main(config)

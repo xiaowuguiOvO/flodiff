@@ -5,3 +5,4 @@ training/wandb
 __pycache__
 .vscode/
 diffusion_policy/
+1.py

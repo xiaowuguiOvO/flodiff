@@ -95,13 +95,12 @@ class flona_ViNT(nn.Module):
 
 
     def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, obs_pos: torch.tensor, goal_pos: torch.tensor, obs_ori: torch.tensor, input_goal_mask: torch.tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
-
+    
         device = obs_img.device
         obs_goal_pos = torch.cat([obs_pos, goal_pos], dim=1)
         obs_goal_pos_ori = torch.cat([obs_goal_pos, obs_ori], dim=1).to(device) # jinan
         # obs_goal_pos_ori = torch.cat([obs_goal_pos, obs_ori - obs_pos], dim=1).to(device)
         # obs_goal_pos_ori = self.obs_goal_expand(obs_goal_pos_ori) # v100new
-        # obs_goal_pos_ori = goal_pos.to(device)
         # Initialize the goal encoding
         # goal_encoding = torch.zeros((obs_img.size()[0], 1, self.goal_encoding_size)).to(device)
         
@@ -135,9 +134,11 @@ class flona_ViNT(nn.Module):
         obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.obs_encoding_size))
         obs_encoding = torch.transpose(obs_encoding, 0, 1)      # b, context_size+1, obs_encoding_size
         obs_encoding = torch.cat((obs_encoding, goal_encoding), dim=1) # b, context_size+2, obs_encoding_size
-
+        
         # obs_goal_pos = self.obs_goal_enc(obs_goal_pos)
 
+        # print("self.mask", self.all_masks.shape)
+        # print(self.all_masks)
         # If a goal mask is provided, mask some of the goal tokens
         if input_goal_mask is not None:
             no_goal_mask = input_goal_mask.long()
@@ -145,20 +146,21 @@ class flona_ViNT(nn.Module):
         else:
             src_key_padding_mask = None
         
+        # print("src_key_padding_mask", src_key_padding_mask)
         # Apply positional encoding 
         if self.positional_encoding:
             obs_encoding = self.positional_encoding(obs_encoding)
-
+        # print("obs_encoding", obs_encoding.shape)
         obs_encoding_tokens = self.sa_encoder(obs_encoding, src_key_padding_mask=src_key_padding_mask)
         
         if src_key_padding_mask is not None:
             avg_mask = torch.index_select(self.avg_pool_mask.to(device), 0, no_goal_mask).unsqueeze(-1)
             obs_encoding_tokens = obs_encoding_tokens * avg_mask
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-        obs_encoding_tokens_fused = torch.cat([obs_encoding_tokens, obs_goal_pos_ori], dim=1)
-        obs_encoding_tokens_fused = self.obs_goal_pos_ori_enc(obs_encoding_tokens_fused) # jinan
+        obs_encoding_tokens = torch.cat([obs_encoding_tokens, obs_goal_pos_ori], dim=1)
+        obs_encoding_tokens = self.obs_goal_pos_ori_enc(obs_encoding_tokens) # jinan
         # obs_encoding_tokens = obs_encoding_tokens + obs_goal_pos
-        return obs_encoding_tokens, obs_encoding_tokens_fused 
+        return obs_encoding_tokens
 
 
 
