@@ -73,9 +73,7 @@ class flona_Dataset(Dataset):
         self.goal_type = goal_type
         self.metric_waypoint_spacing = 0.045 #0.255    # 0.045
 
-        # Load the list of trajectories
-        # self.trajs_dir = os.path.join(data_folder, scene_name)
-        # self.trajs_dirs = [os.path.join(data_folder, scene_name) for scene_name in scene_names]
+
         self._image_caches = {}
         self.traj_names = {}    # {scene_name: [traj_name]}
         for scene_name in scene_names:
@@ -85,19 +83,11 @@ class flona_Dataset(Dataset):
                     self.traj_names[scene_name].append(file)
             self.traj_names[scene_name].sort()
         print('traj_names produced and size ', sys.getsizeof(self.traj_names))
-        # for file in os.listdir(self.trajs_dir):
-        #     if os.path.isdir(os.path.join(self.trajs_dir, file)) and file[0] == "t":
-        #         self.traj_names.append(file)
-        # self.traj_names.sort()
+        
 
         self.trajectory_cache = {} # {scene_name: {traj_name: traj_data}}
         self._load_index()
-        # print('self image_cache size ', sys.getsizeof(self._image_cache))
-        # print('self trajectory_cache size ', sys.getsizeof(self.trajectory_cache))
-        # self._build_caches()
-        # print('self image_cache size ', sys.getsizeof(self._image_cache))
-        # print('self trajectory_cache size ', sys.getsizeof(self.trajectory_cache))
-        # print(self.__len__())
+        
         self.floor_shapes_ori = np.load('/home/user/data/vis_nav/iGibson/igibson/dataset/trav_maps/floor_shapes.npy', allow_pickle=True).item()
         if self.learn_angle:
             self.num_action_params = 3
@@ -153,10 +143,6 @@ class flona_Dataset(Dataset):
                             with open(image_path, "rb") as f:
                                 txn.put(image_path.encode(), f.read())
                             
-                            # save every 1000 images
-                            # if idx % 1000 == 0:
-                            #     txn.commit()
-                            #     txn = image_cache.begin(write=True)
 
                         trajs = self.traj_names[scene_name]
                         for traj_name in trajs:
@@ -173,67 +159,7 @@ class flona_Dataset(Dataset):
                         with open(image_path, "rb") as f:
                             txn.put(image_path.encode(), f.read())
             self._image_caches[scene_name] = lmdb.open(cache_filename, readonly=True)
-            
-        # cache_filename = os.path.join(
-        #     self.data_folder,
-        #     # f"dataset_{len(self.scene_names)}.lmdb",
-        #     "dataset_117.lmdb"
-        # )
-        
-        # # cache_filenames = [os.path.join(self.data_folder, scene_name, f"dataset_{scene_name}.lmdb") for scene_name in self.scene_names]
-
-        # # Load all the trajectories into memory. These should already be loaded, but just in case.
-        # for scene_name in self.scene_names:
-        #     for traj_name in self.traj_names[scene_name]:
-        #         self._get_trajectory(scene_name, traj_name)
-        # print('trajectories loaded and size ', sys.getsizeof(self.trajectory_cache))
-
-        # """
-        # If the cache file doesn't exist, create it by iterating through the dataset and writing each image to the cache
-        # """
-        # if not os.path.exists(cache_filename):
-        #     tqdm_iterator = tqdm.tqdm(
-        #         self.index_to_data_str,
-        #         disable=not use_tqdm,
-        #         dynamic_ncols=True,
-        #         desc=f"Building LMDB cache for {len(self.scene_names)} scenes",
-        #     )
-        #     with lmdb.open(cache_filename, map_size=2**30*700) as image_cache:
-        #         with image_cache.begin(write=True) as txn:
-        #             for idx, scene_name_and_traj_name in enumerate(tqdm_iterator):
-        #                 time = self.index_to_data_int[idx, 0]
-        #                 scene_name, traj_name = scene_name_and_traj_name.split('-')
-        #                 image_path = get_data_path(os.path.join(self.data_folder, scene_name), traj_name, time)
-        #                 with open(image_path, "rb") as f:
-        #                     txn.put(image_path.encode(), f.read())
-                        
-        #                 # save every 1000 images
-        #                 # if idx % 1000 == 0:
-        #                 #     txn.commit()
-        #                 #     txn = image_cache.begin(write=True)
-
-        #             for scene_name in self.traj_names:
-        #                 trajs = self.traj_names[scene_name]
-        #                 for traj_name in trajs:
-        #                     image_path_0 = get_data_path(os.path.join(self.data_folder, scene_name), traj_name, 0)
-        #                     image_path_1 = get_data_path(os.path.join(self.data_folder, scene_name), traj_name, 1) 
-        #                     image_path_2 = get_data_path(os.path.join(self.data_folder, scene_name), traj_name, 2)
-        #                     with open(image_path_0, "rb") as f:
-        #                         txn.put(image_path_0.encode(), f.read())
-        #                     with open(image_path_1, "rb") as f:
-        #                         txn.put(image_path_1.encode(), f.read())
-        #                     with open(image_path_2, "rb") as f:
-        #                         txn.put(image_path_2.encode(), f.read())                      
-        #                 image_path = get_data_path(self.data_folder, scene_name, "floorplan")
-        #                 with open(image_path, "rb") as f:
-        #                     txn.put(image_path.encode(), f.read())
-                        
-                        # txn.commit()
-                        # tnx = image_cache.begin(write=True)
-                        
-        # Reopen the cache file in read-only mode
-        # self._image_cache: lmdb.Environment = lmdb.open(cache_filename, readonly=True)
-        # print("LMDB cache built")
+         
 
     def _build_index(self, use_tqdm: bool = False):
         """
@@ -254,7 +180,7 @@ class flona_Dataset(Dataset):
                 goals_pos.append(goal_pos)
                 begin_time = self.context_size * self.waypoint_spacing
                 end_time = traj_len - self.end_slack - self.len_traj_pred * self.waypoint_spacing
-                for curr_time in range(begin_time, end_time):    # is the whole seq len is less than pred_len begin_time will be greater than end_time and the loop will not run               
+                for curr_time in range(begin_time, end_time):    
                     goal_min_end_time = min(traj_len - self.end_slack, curr_time + self.len_traj_pred * self.waypoint_spacing)
                     goal_max_end_time = traj_len - self.end_slack
                     for goal_time in range(goal_min_end_time, goal_max_end_time + 1):
@@ -292,28 +218,10 @@ class flona_Dataset(Dataset):
             self.data_folder,
             f"dataset_n{self.context_size}_slack_{self.end_slack}.npz",
         )
-        # with open(index_to_data_path, "rb") as f:
-        #     # print('Loading index, index_to_data size', sys.getsizeof(self.index_to_data))
-        #     print('Loading index', 'ram used ', psutil.virtual_memory().used / 1024 / 1024 / 1024)
-        #     self.index_to_data, self.goals_pos = pickle.load(f)
-        #     gc.collect()
-        #     print('Index loaded, index_to_data size', sys.getsizeof(self.index_to_data))
-        #     print('Index loaded', 'ram used ', psutil.virtual_memory().used / 1024 / 1024 / 1024)
-        # npz = np.load(index_to_data_path, allow_pickle=True)
-        # # self.index_to_data = npz["index_to_data"]
-        # index_to_data = npz["index_to_data"]
-        # self.index_to_data_str = index_to_data[:,0].copy()
-        # self.index_to_data_int = index_to_data[:,1:].copy().astype(np.int16)
-        # del index_to_data
-        # self.goals_pos = npz["goals_pos"]
-        # print('Index loaded, index_to_data size', sys.getsizeof(self.index_to_data_str), sys.getsizeof(self.index_to_data_int))
+     
         try:
             # load the index_to_data if it already exists (to save time)
-            # with open(index_to_data_path, "rb") as f:
-            #     print('Loading index, index_to_data size', sys.getsizeof(self.index_to_data))
-            #     self.index_to_data, self.goals_pos = pickle.load(f)
-            #     print('Index loaded, index_to_data size', sys.getsizeof(self.index_to_data))
-            # npz
+
             npz = np.load(index_to_data_path, allow_pickle=True)
             # self.index_to_data = npz["index_to_data"]
             index_to_data = npz["index_to_data"]
@@ -322,12 +230,6 @@ class flona_Dataset(Dataset):
             del index_to_data
             self.goals_pos = npz["goals_pos"]
             print('Index loaded, index_to_data size', sys.getsizeof(self.index_to_data_str))
-
-        #     # h5py
-        #     # with h5py.File(index_to_data_path, 'r') as f:
-        #     #     self.index_to_data = f['index_to_data'][:]
-        #     #     self.goals_pos = f['goals_pos'][:]
-        #     # print('Index loaded, index_to_data size', sys.getsizeof(self.index_to_data))
 
         except:
             # if the index_to_data file doesn't exist, create it
@@ -338,16 +240,9 @@ class flona_Dataset(Dataset):
             self.index_to_data_str = index_to_data[:,0].copy()
             self.index_to_data_int = index_to_data[:,1:].copy().astype(np.int16)
             print('get index')
-            # h5py
-            # with h5py.File(index_to_data_path, 'w') as f:
-            #     f.create_dataset('index_to_data', data=np.array(self.index_to_data, dtype='S'), chunks=True)
-            #     f.create_dataset('goals_pos', data=np.array(self.goals_pos, dtype='S'), chunks=True)
-            # npz
+
             np.savez(index_to_data_path, index_to_data=index_to_data, goals_pos=self.goals_pos)
             del index_to_data
-            # pickle
-            # with open(index_to_data_path, "wb") as f:
-            #     pickle.dump((self.index_to_data, self.goals_pos), f)
             print('Index built')
 
     def _load_image(self, scene_name, trajectory_name, name): 
@@ -355,26 +250,11 @@ class flona_Dataset(Dataset):
             image_path = get_data_path(self.data_folder, scene_name, name)
         else:
             image_path = get_data_path(os.path.join(self.data_folder, scene_name), trajectory_name, name)
-        # print('get image path')
-
-        # try:
-        #     with self._image_caches[scene_name].begin() as txn:
-        #         # time0 = time.time()
-        #         image_buffer = txn.get(image_path.encode())
-        #         # time1 = time.time()
-        #         image_bytes = bytes(image_buffer)
-        #         # time2 = time.time()
-        #         # print(f"get image time: {time1 - time0}, bytes time: {time2 - time1}")
-        #     image_bytes = io.BytesIO(image_bytes)
-        #     # print('get cache')
-        #     result = img_path_to_data(image_bytes, self.image_size)
-        #     return result
+        
         try:   # directedly load from disk
-            # time0 = time.time()
             with open(image_path, "rb") as f:
                 result = img_path_to_data(f, self.image_size)
-            # time1 = time.time()
-            # print(f"get image time: {time1 - time0}")
+
             return result
             
         except TypeError:
@@ -390,12 +270,6 @@ class flona_Dataset(Dataset):
         else:
             image_path = get_data_path(os.path.join(self.data_folder, scene_name), trajectory_name, name)
 
-        # try:
-        #     with self._image_caches[scene_name].begin() as txn:  
-        #         image_buffer = txn.get(image_path.encode())
-        #         image_bytes = bytes(image_buffer)
-        #     image_bytes = io.BytesIO(image_bytes)
-        #     return img_path_to_data_and_point_transfer(image_bytes, self.floor_shapes_ori[scene_name], self.image_size, cur_pos_metric, goal_pos_metric, cur_ori_metric)
         try:
             with open(image_path, "rb") as f:
                 result = img_path_to_data_and_point_transfer(f, self.floor_shapes_ori[scene_name], self.image_size, cur_pos_metric, goal_pos_metric, cur_ori_metric)
@@ -408,13 +282,9 @@ class flona_Dataset(Dataset):
         end_index = curr_time + self.len_traj_pred * self.waypoint_spacing + 1
         yaw = traj_data[start_index:end_index:self.waypoint_spacing, 2:].copy()
         positions = traj_data[start_index:end_index:self.waypoint_spacing, :2].copy()
-        # goal_pos = traj_data[-1 - self.end_slack, :2].copy()
+
         goal_pos = traj_data[goal_time, :2].copy()
     
-
-        # goal_pos = to_local_coords(goal_pos, positions[0], yaw[0])
-        # waypoints = to_local_coords(positions, positions[0], yaw[0])
-        # cur_pos = waypoints[0]
         
         cur_pos = positions[0]
         cur_ori = yaw[0]
@@ -457,12 +327,7 @@ class flona_Dataset(Dataset):
         goal_pos = to_local_coords(goal_pos, positions[0], yaw[0])
         waypoints = to_local_coords(positions, positions[0], yaw[0])
         cur_pos = waypoints[0]
-        
-        # cur_pos = positions[0]
-        # cur_ori = yaw[0]
-        # waypoints = to_local_coords(positions, positions[0], yaw[0])
-        
-        
+
         
         
         assert waypoints.shape == (self.len_traj_pred + 1, 2), f"{waypoints.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
