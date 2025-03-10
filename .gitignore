@@ -1,9 +1,0 @@
-predict_position/logs
-predict_position/wandb
-training/logs
-training/wandb
-__pycache__
-.vscode/
-diffusion_policy/
-1.py
-flona.egg_info/
