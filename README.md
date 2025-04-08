@@ -12,13 +12,13 @@ Welcome to FloNa! This repository is the official implementation of paper "FloNa
 ## 1. Environment Setup
 Install iGibson
 
-'''bash
+```bash
 git clone https://github.com/StanfordVL/iGibson --recursive
 cd iGibson
 conda create -y -n igibson python=3.8
 conda activate igibson
 pip install -e . # This step takes about 4 minutes
-'''
+```
 
 ## 2. Dataset
 ### a. Collect Dataset 
