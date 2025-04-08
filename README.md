@@ -12,7 +12,7 @@ Welcome to FloNa! This repository is the official implementation of paper "FloNa
 ## 1. Environment Setup
 Install iGibson
 
-'''
+'''bash
 git clone https://github.com/StanfordVL/iGibson --recursive
 cd iGibson
 conda create -y -n igibson python=3.8
