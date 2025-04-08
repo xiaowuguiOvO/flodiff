@@ -11,6 +11,7 @@ Welcome to FloNa! This repository is the official implementation of paper "FloNa
 
 ## 1. Environment Setup
 Install iGibson
+
 '''
 git clone https://github.com/StanfordVL/iGibson --recursive
 cd iGibson
