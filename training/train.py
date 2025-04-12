@@ -7,7 +7,7 @@ import numpy as np
 import wandb
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from torchvision import transforms
 import torch.backends.cudnn as cudnn
@@ -30,13 +30,9 @@ def main(config):
         image_size=config["image_size"],
         waypoint_spacing=data_config["waypoint_spacing"],
         len_traj_pred=config["len_traj_pred"],
-        # learn_angle=config["learn_angle"],
         context_size=config["context_size"],
         end_slack=data_config["end_slack"],
-        # goals_per_obs=data_config["goals_per_obs"],
         normalize=config["normalize"],
-        # obs_type=config["obs_type"],
-        # goal_type=config["goal_type"],
     )
     test_dataset = flona_Dataset(
         data_folder=os.path.join(data_config["data_folder"], "test"),
@@ -44,13 +40,9 @@ def main(config):
         image_size=config["image_size"],
         waypoint_spacing=data_config["waypoint_spacing"],
         len_traj_pred=config["len_traj_pred"],
-        # learn_angle=config["learn_angle"],
         context_size=config["context_size"],
         end_slack=data_config["end_slack"],
-        # goals_per_obs=data_config["goals_per_obs"],
         normalize=config["normalize"],
-        # obs_type=config["obs_type"],
-        # goal_type=config["goal_type"],
     )
     train_loader = DataLoader(
         train_dataset,
