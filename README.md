@@ -77,7 +77,7 @@ cd /path_to_flodiff/training
 python train.py
 ```
 ## 4. Testing in simulator
-a. Install iGibson
+a. Install iGibson:
 ```bash
 cd /path_to_flodiff
 git clone https://github.com/StanfordVL/iGibson --recursive
@@ -89,5 +89,5 @@ b. Download scenes:
 Please refer to this [link](https://stanfordvl.github.io/iGibson/dataset.html) to download the Gibson static scenes. We recommend saving the downloaded scenes in the following directory: /path_to_flodiff/iGibson/igibson/data/g_dataset.
 
 c. Testing:
- 
+
 You can 
