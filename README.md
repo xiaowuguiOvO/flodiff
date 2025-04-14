@@ -30,6 +30,7 @@ conda env create -n flodiff -f environment.yaml
 conda activate flodiff
 ```
 b. Install the `diffusion_policy`:
+
 ```bash
 cd /path_to_flodiff
 git clone https://github.com/real-stanford/diffusion_policy.git
@@ -37,6 +38,7 @@ pip install -e diffusion_policy/
 ```
 ## 2. Dataset
 a. Download our pre-collected dataset:
+
 We collected navigation episodes on [Gibson static scenes](https://stanfordvl.github.io/iGibson/dataset.html) for training and evaluation. The structure of the episode data is organized as follows:
 ```bash
 |--<train>
@@ -82,6 +84,7 @@ cd iGibson
 pip install -e . # This step takes about 4 minutes
 ```
 b. Download scenes
+
 Please refer to this [link](https://stanfordvl.github.io/iGibson/dataset.html) to download the Gibson static scenes. We recommend saving the downloaded scenes in the following directory: /path_to_flodiff/iGibson/igibson/data/g_dataset.
 
 c. Testing 
