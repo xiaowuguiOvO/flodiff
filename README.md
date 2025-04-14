@@ -1,4 +1,17 @@
-# FloNa
+# FloNa：Floor Plan Guided Embodied Visual Navigation
+[![](https://img.shields.io/badge/Paper-arXiv-green?style=plastic&logo=arXiv&logoColor=green)](https://arxiv.org/pdf/2412.18335)
+[![](https://img.shields.io/badge/Project-Page-blue?style=plastic&logo=githubpages&logoColor=blue)](https://gauleejx.github.io/flona/)
+
+[Jiaxin Li](https://gauleejx.github.io/),
+[Weiqi Huang](),
+[Zan Wang](https://silvester.wang/),
+[Wei Liang](https://pie-lab.cn/),
+[Huijun Di](),
+[Feng Liu]()
+
+<div align=center>
+<img src='./asset/teaser.png' width=60%>
+</div>
 
 Welcome to FloNa! This repository is the official implementation of paper "FloNa: Floor Plan Guided Embodied Visual Navigation".
 
