@@ -18,8 +18,8 @@ Welcome to FloNa! This repository is the official implementation of paper "FloNa
 ## Table of Contents
 - [1. Environment Setup](#1-environment-setup)
 - [2. Dataset](#2-dataset)
-- [3. Training](#4-training)
-- [4. Testing in simulator](#5-testing-in-simulator)
+- [3. Training](#3-training)
+- [4. Testing in simulator](#4-testing-in-simulator)
 
 ## 1. Environment Setup
 a. Create a new `conda` environment:
