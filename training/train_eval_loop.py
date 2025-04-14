@@ -59,7 +59,7 @@ def train_eval_loop_flona(
         eval_fraction: fraction of training data to use for evaluation
         eval_freq: frequency of evaluation
     """
-    #
+    # ==============================Train==============================
     latest_path = os.path.join(project_folder, f"latest.pth")
     ema_model = EMAModel(model=model, power=0.75)
     
@@ -107,7 +107,7 @@ def train_eval_loop_flona(
         latest_scheduler_path = os.path.join(project_folder, f"scheduler_latest.pth")
         torch.save(lr_scheduler.state_dict(), latest_scheduler_path)
 
-
+        #==============================Eval==============================
         if (epoch + 1) % eval_freq == 0: 
             print(
                 f"Start flona Testing Epoch {epoch}/{current_epoch + epochs - 1}"
