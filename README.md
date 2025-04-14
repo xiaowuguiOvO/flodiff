@@ -65,6 +65,7 @@ We collected navigation episodes on [Gibson static scenes](https://stanfordvl.gi
 |   |...
 ```
 You can download it from [BaiduDisk](https://pan.baidu.com/s/1kQnEJqHMPVRw0xcjGIUTvQ?pwd=skjj). Please note that the dataset is approximately 500 GB, so make sure you have sufficient disk space.
+
 b. Unpack this tar archive:
 ```bash
 cat /path_to_dataset/dataset.tar_* > /path_to_dataset/dataset.tar
@@ -83,9 +84,10 @@ git clone https://github.com/StanfordVL/iGibson --recursive
 cd iGibson
 pip install -e . # This step takes about 4 minutes
 ```
-b. Download scenes
+b. Download scenes:
 
 Please refer to this [link](https://stanfordvl.github.io/iGibson/dataset.html) to download the Gibson static scenes. We recommend saving the downloaded scenes in the following directory: /path_to_flodiff/iGibson/igibson/data/g_dataset.
 
-c. Testing 
+c. Testing:
+ 
 You can 
