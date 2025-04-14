@@ -3,11 +3,11 @@
 [![](https://img.shields.io/badge/Project-Page-blue?style=plastic&logo=githubpages&logoColor=blue)](https://gauleejx.github.io/flona/)
 
 [Jiaxin Li](https://gauleejx.github.io/),
-[Weiqi Huang](),
+Weiqi Huang,
 [Zan Wang](https://silvester.wang/),
 [Wei Liang](https://pie-lab.cn/),
-[Huijun Di](),
-[Feng Liu]()
+Huijun Di,
+Feng Liu
 
 <div align=center>
 <img src='./asset/teaser.png' width=60%>
