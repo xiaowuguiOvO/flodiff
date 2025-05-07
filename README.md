@@ -69,7 +69,9 @@ You can download it from [BaiduDisk](https://pan.baidu.com/s/1eqHdBWQWKFUF-kJ5xH
 b. Unpack this tar archive:
 ```bash
 cat /path_to_dataset/dataset.tar_* > /path_to_dataset/dataset.tar
-tar -xvf dataset.tar -C /path_to_flodiff/
+tar -xvf dataset.tar -C /path_to_flodiff/datasets
+mkdir /path_to_flodiff/datasets/trav_maps
+tar -xzvf /path_to_dataset/trav_maps.tar.gz -C /path_to_flodiff/datasets/trav_maps
 ```
 ## 3. Training
 To train your own model, simply run the following command:
@@ -93,4 +95,4 @@ Please refer to this [link](https://stanfordvl.github.io/iGibson/dataset.html) t
 
 c. Testing:
 
-You can 
+Comming soon...
