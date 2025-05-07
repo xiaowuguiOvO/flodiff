@@ -64,7 +64,7 @@ We collected navigation episodes on [Gibson static scenes](https://stanfordvl.gi
 |--<test>
 |   |...
 ```
-You can download it from [BaiduDisk](https://pan.baidu.com/s/1kQnEJqHMPVRw0xcjGIUTvQ?pwd=skjj). Please note that the dataset is approximately 500 GB, so make sure you have sufficient disk space.
+You can download it from [BaiduDisk](https://pan.baidu.com/s/1CcI4S8MCA0Lrt2KCwax5jA?pwd=i8i1). Please note that the dataset is approximately 500 GB, so make sure you have sufficient disk space.
 
 b. Unpack this tar archive:
 ```bash
@@ -72,10 +72,13 @@ cat /path_to_dataset/dataset.tar_* > /path_to_dataset/dataset.tar
 tar -xvf dataset.tar -C /path_to_flodiff/
 ```
 ## 3. Training
+To train your own model, simply run the following command:
 ```bash
 cd /path_to_flodiff/training
 python train.py
 ```
+The model is saved to `/training/log/flona` by default. If you need to change the save location, modify the `flona.yaml` configuration file. 
+Note: This code is designed for training on a single GPU. If you wish to use multiple GPUs, you'll need to modify the code accordingly.
 ## 4. Testing in simulator
 a. Install iGibson:
 ```bash
