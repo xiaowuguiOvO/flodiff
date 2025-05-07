@@ -21,6 +21,7 @@ class flona_Dataset(Dataset):
     def __init__(
         self,
         data_folder: str,
+        trav_folder: str,   
         scene_names: List[str],
         image_size: Tuple[int, int],
         waypoint_spacing: int,
@@ -49,7 +50,8 @@ class flona_Dataset(Dataset):
         print('traj_names produced and size ', sys.getsizeof(self.traj_names))
         self.trajectory_cache = {} # {scene_name: {traj_name: traj_data}}
         self._load_index()
-        self.floor_shapes_ori = np.load('/home/user/data/vis_nav/iGibson/igibson/dataset/trav_maps/floor_shapes.npy', allow_pickle=True).item()
+        self.floor_shapes_ori =  np.load(os.path.join(trav_folder, "floor_shapes.npy"), allow_pickle=True).item()
+
         self.num_action_params = 2
         
     def _build_caches(self, use_tqdm: bool = True):
