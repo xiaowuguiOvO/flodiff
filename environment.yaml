@@ -1,4 +1,4 @@
-name: flona
+name: flodiff
 channels:
 - https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
 - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch/
@@ -25,6 +25,7 @@ dependencies:
   - lmdb 
   - vit-pytorch
   - positional-encodings
+  - huggingface-hub==0.23.4
 
 
 

@@ -26,6 +26,7 @@ def main(config):
     data_config = config["datasets"]
     train_dataset = flona_Dataset(
         data_folder=os.path.join(data_config["data_folder"], "train"),
+        trav_folder=data_config["trav_map_folder"],
         scene_names=data_config['scene_names'],
         image_size=config["image_size"],
         waypoint_spacing=data_config["waypoint_spacing"],
@@ -36,6 +37,7 @@ def main(config):
     )
     test_dataset = flona_Dataset(
         data_folder=os.path.join(data_config["data_folder"], "test"),
+        trav_folder=data_config["trav_map_folder"],
         scene_names=data_config['scene_names'],
         image_size=config["image_size"],
         waypoint_spacing=data_config["waypoint_spacing"],

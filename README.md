@@ -28,6 +28,7 @@ git clone https://github.com/GauleeJX/flodiff.git
 cd flodiff
 conda env create -n flodiff -f environment.yaml
 conda activate flodiff
+pip install -e .
 ```
 b. Install the `diffusion_policy`:
 
