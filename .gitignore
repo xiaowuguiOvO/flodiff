@@ -7,3 +7,5 @@ __pycache__
 diffusion_policy/
 1.py
 flona.egg_info/
+datasets/
+iGibson/igibson/data/

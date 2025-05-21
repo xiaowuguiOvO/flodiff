@@ -191,7 +191,7 @@ def train_flona(
             assert naction.shape[-1] == 2, "action dim must be 2"
 
             # Predict distance
-            dist_pred = model("dist_pred_net", obsfloorplan_cond=obsfloorplan_cond)
+            dist_pred = model("dist_pred_net", obsgoal_cond=obsfloorplan_cond)
             dist_loss = nn.functional.mse_loss(dist_pred.squeeze(-1), distance)
             # Sample noise to add to actions
             noise = torch.randn(naction.shape, device=device)
@@ -228,9 +228,9 @@ def train_flona(
             # Logging
             loss_cpu = loss.item()
             tepoch.set_postfix(loss=loss_cpu)
-            wandb.log({"total_loss": loss_cpu})
-            wandb.log({"dist_loss": dist_loss.item()})
-            wandb.log({"diffusion_loss": diffusion_loss.item()})
+            # wandb.log({"total_loss": loss_cpu})
+            # wandb.log({"dist_loss": dist_loss.item()})
+            # wandb.log({"diffusion_loss": diffusion_loss.item()})
 
 
             if i % print_log_freq == 0:
