@@ -74,4 +74,3 @@ depth_noise_rate: 0.0
 # visual objects
 visible_target: true
 visible_path: false
-

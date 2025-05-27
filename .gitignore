@@ -10,3 +10,5 @@ flona.egg_info/
 datasets/
 checkpoints/
 iGibson/igibson/data
+datasets/
+iGibson/igibson/data/
