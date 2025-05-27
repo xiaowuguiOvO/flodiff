@@ -1,6 +1,7 @@
 # scene
 scene: gibson
-scene_id: Rs
+# scene_id: Albertville
+scene_id: Eudora
 scene_path: iGibson/igibson/data/g_dataset/
 build_graph: true
 load_texture: true
@@ -16,7 +17,7 @@ object_randomization_freq: null
 
 # robot
 robot:
-  name: Turtlebot
+  name: Locobot
   action_type: continuous
   action_normalize: true
   base_name: null
@@ -26,6 +27,9 @@ robot:
   controller_config:
     base:
       name: DifferentialDriveController
+      command_output_limits:
+        - [-0.5, -1.57]
+        - [0.5, 1.57]
 
 # task
 task: point_nav_random
@@ -45,40 +49,29 @@ discount_factor: 0.99
 
 # termination condition
 dist_tol: 0.36  # body width
-max_step: 500
 max_collisions_allowed: 500
-
+max_step: 3000
 # misc config
 initial_pos_z_offset: 0.1
 collision_ignore_link_a_ids: [1, 2, 3, 4]  # ignore collisions with these robot links
 
 # sensor spec
-output: [task_obs, rgb, depth, scan]
+output: [task_obs, rgb, depth]
 # image
-# ASUS Xtion PRO LIVE
-# https://www.asus.com/us/3D-Sensor/Xtion_PRO_LIVE
+# Intel Realsense Depth Camera D435
+# https://store.intelrealsense.com/buy-intel-realsense-depth-camera-d435.html
 fisheye: false
-image_width: 640
-image_height: 480
-vertical_fov: 45
+image_width: 160
+image_height: 90
+vertical_fov: 42.5
 # depth
-depth_low: 0.8
-depth_high: 3.5
-# scan
-# Hokuyo URG-04LX-UG01
-# https://www.hokuyo-aut.jp/search/single.php?serial=166
-# n_horizontal_rays is originally 683, sub-sampled 1/3
-n_horizontal_rays: 228
-n_vertical_beams: 1
-laser_linear_range: 5.6
-laser_angular_range: 240.0
-min_laser_dist: 0.05
-laser_link_name: scan_link
+depth_low : 0.1
+depth_high: 10.0
 
 # sensor noise
 depth_noise_rate: 0.0
-scan_noise_rate: 0.0
 
 # visual objects
 visible_target: true
 visible_path: false
+

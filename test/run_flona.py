@@ -7,12 +7,21 @@ import training.train_utils as train_utils
 import yaml
 import numpy as np
 import cv2
-def main(headless=False, short_exec_episodes=3, short_exec_steps=200, scene_config_path=None, model_config_path=None):
+import pybullet as p
+from training.train_utils import *
+from test_utils import *
+np.set_printoptions(precision=2, suppress=True)
+
+PREDICT_INTERVAL = 5 # 预测超时时间
+GOAL_POINT_NUM = 5
+
+def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None, model_config_path=None):
     
     env_mode = "headless" if headless else "gui_interactive"
     env = iGibsonEnv(
         config_file=scene_config_path,
-        mode=env_mode
+        mode=env_mode,
+        use_pb_gui=True
     )
 
     # load scene config and model config
@@ -22,54 +31,126 @@ def main(headless=False, short_exec_episodes=3, short_exec_steps=200, scene_conf
         model_config = yaml.safe_load(f)
     
     agent = FloNaAgent.FloNaAgent(model_path=model_path, config=model_config)
-    num_episodes = 1 if short_exec_episodes is None else short_exec_episodes
 
     for episode in range(num_episodes):
         print(f"--- Episode: {episode + 1} ---")
         # 重置环境，获取初始观察值
         observation = env.reset()
-        num_steps = 50 if short_exec_steps is None else short_exec_steps
         floorplan_img_path = os.path.join(scene_config["scene_path"], scene_config["scene_id"], 'floorplan.png')
+        print(f"floorplan_img_path: {floorplan_img_path}")
         floorplan_img = cv2.imread(floorplan_img_path)
+        action = [0, 0]
+        prev_line_ids = []
+        # pd controller
+        pd = PDController(Kp_lin=0.5, Kd_lin=0.00, Kp_ang=0.5, Kd_ang=0.1)
+        IS_ARRIVE_FLAG = True
+        IS_DECISION_FLAG = True
+        goal_point_idx = 0
+        goal_point = np.array([0, 0]) # 目标点
+        prev_time = time.time()
+        last_predict_time = prev_time - PREDICT_INTERVAL  # 强制第一次立即预测
+        
+        # init state
+        obs_img = observation["rgb"]
+        robot_pos = env.robots[0].get_position()[:2]  # ground truth
+        robot_ori = env.robots[0].get_rpy()[2]
+        obs_ori = np.array([np.sin(robot_ori), np.cos(robot_ori)])
+        target_pos = env.task.target_pos[:2].copy()  # ground truth
+        agent.update_vision_input(
+            obs_img=obs_img,
+            floorplan_img=floorplan_img,
+            obs_pos=robot_pos,
+            goal_pos=target_pos,
+            obs_ori=obs_ori
+            )
+        
         for step in range(num_steps):
-            if env.action_space: 
-                action = env.action_space.sample()
-            else:
-                action = None 
+
             # take action
             state, reward, done, info = env.step(action)
             
             # get observation
-            robot_pos = env.robots[0].get_position() # ground truth
+            robot_pos = env.robots[0].get_position()[:2] # ground truth
             robot_ori = env.robots[0].get_rpy()[2] # ground truth
-            robot_ori = [np.sin(robot_ori), np.cos(robot_ori)]
-            target_pos = env.task.target_pos
+            obs_ori = np.array([np.sin(robot_ori), np.cos(robot_ori)])
+            target_pos = env.task.target_pos[:2].copy()
+            FLOOR_Z = env.task.target_pos[2]
             obs_img = state["rgb"]
-            agent.update_vision_input(
+
+            # check if arrive
+            if check_is_arrive(robot_pos, goal_point, threshold=0.05):
+                # print("update state")
+                agent.update_vision_input(
                 obs_img=obs_img,
                 floorplan_img=floorplan_img,
                 obs_pos=robot_pos,
                 goal_pos=target_pos,
-                obs_ori=robot_ori
-            )
+                obs_ori=obs_ori
+                )
+                IS_ARRIVE_FLAG = False
+                goal_point_idx += 1
+                if goal_point_idx >= GOAL_POINT_NUM:
+                # print(f"Robot arrived at the target position: {target_pos}.")
+                    IS_DECISION_FLAG = True
+
+            # check time interval for decision making
+            if not IS_ARRIVE_FLAG and (time.time() - last_predict_time >= PREDICT_INTERVAL):
+                IS_DECISION_FLAG = True
+                goal_point_idx = 0
+                IS_ARRIVE_FLAG = False
+                print("over time decision")
+
+            if IS_DECISION_FLAG:
+
+                last_predict_time = time.time()
+                # predict
+                metric_waipoint_spacing = 0.1
+                waypoint_spacing = 1.0
+                output = agent.get_action(agent.obs_img_queue, agent.floorplan_img, agent.obs_pos, agent.goal_pos, agent.obs_ori, metric_waipoint_spacing, waypoint_spacing)
+                actions = output["actions"].mean(dim=0)
+                # print(actions.shape)
+                actions_normed_global = to_global_coords(actions.cpu().numpy(), agent.obs_pos, agent.obs_ori)
+                actions_meter_global = actions_normed_global
+                actions_meter_global = actions_normed_global * metric_waipoint_spacing * waypoint_spacing
+                # print(actions_normed_global.shape)
+                # print(actions)
+                
+                trajectory = actions_meter_global[:16]
+                draw_predicted_trajectory(trajectory, base_z=FLOOR_Z+0.02)
+                
+                IS_DECISION_FLAG = False
+                goal_point_idx = 0
+            
+            # print(robot_pos, goal_point)
+            
+            # pd control
+            now = time.time()
+            dt = now - prev_time
+            prev_time = now
+            goal_point = trajectory[goal_point_idx]
+            action = pd.compute(robot_pos, robot_ori, goal_point, dt)
+            # action = [0, 0]
+            # action[0] = 0
+            # print(robot_ori)
+            # print(f'goal_linear_speed: {action[0]}')
+            # print(f'cur_angular_speed, goal_angular_speed: {robot_ori}, {action[1]}')
+            # action = [0,0]
+            # print(trajectory)
             if done:
-                print(f"Episode {episode + 1} 在 {step + 1} 步后结束。")
+                print(f"Episode ended at step {step + 1} with reward {reward}.")
                 break
         
-        if not done and num_episodes > 1: # 避免在只运行少数步骤时打印
-                print(f"Episode {episode + 1} 达到最大步数 ({num_steps})。")
+        if not done and num_episodes > 1: 
+                print(f"Episode {episode + 1} arrive max step ({num_steps})。")
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO) # 设置日志级别
-    run_headless = False        # True: 无GUI运行, False: 带GUI运行
-    run_episodes = 3            # 运行多少个 episode
-    run_steps_per_episode = 200 # 每个 episode 运行多少步
+    logging.basicConfig(level=logging.INFO) 
+    run_headless = False       
 
-    
-    model_path = "checkpoints\ema_0.pth" # 模型路径
+    model_path = "checkpoints\ema_9.pth" # 模型路径
     scene_config_path = "test/load_igibson_scene.yaml"
     model_config_path = 'flona.yaml'
     model_config = None
     
-    main(headless=run_headless, short_exec_episodes=run_episodes, short_exec_steps=run_steps_per_episode,scene_config_path=scene_config_path, model_config_path=model_config_path)
+    main(headless=run_headless, num_episodes=15, num_steps=2000, scene_config_path=scene_config_path, model_config_path=model_config_path)

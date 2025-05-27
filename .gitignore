@@ -8,3 +8,5 @@ diffusion_policy/
 1.py
 flona.egg_info/
 datasets/
+checkpoints/
+iGibson/igibson/data

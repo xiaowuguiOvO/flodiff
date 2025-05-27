@@ -6,7 +6,12 @@ from model.flona import flona
 from model.flona_vint import flona_ViNT, replace_bn_with_gn
 from diffusion_policy.diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from model.flona import DenseNetwork
-
+import numpy as np
+from training.train_utils import unnormalize_data, to_numpy, from_numpy
+from diffusers.training_utils import EMAModel
+ACTION_STATS = {}
+ACTION_STATS["min"] = np.array([-2.5, -4])
+ACTION_STATS["max"] = np.array([5, 4])   
 class FloNaAgent:
     def __init__(self, model_path=None, config=None):
         # 初始化模型
@@ -74,13 +79,15 @@ class FloNaAgent:
             noise_pred_net=self.noise_pred_net,
             dist_pred_net=self.dist_pred_network,
         )
-        noise_scheduler = DDPMScheduler(
+        model = model.to(self.device)
+
+        self.noise_scheduler = DDPMScheduler(
             num_train_timesteps=config["num_diffusion_iters"],
             beta_schedule='squaredcos_cap_v2',
             clip_sample=True,
             prediction_type='epsilon'
         )
-        model = model.to(self.device)
+        
         return model
 
     def load_model(self, model_path):
@@ -89,26 +96,43 @@ class FloNaAgent:
             checkpoint = torch.load(model_path, map_location=self.device)
             self.model = self.build_model(self.config)
             missing, unexpected = self.model.load_state_dict(checkpoint, strict=False)
+            self.model = EMAModel(
+                self.model,
+                inv_gamma=1.0,
+                power=0.75,
+                min_value=0.0,
+                max_value=0.9999
+            )
+            self.model = self.model.averaged_model
             self.model.eval()
+            
         except Exception as e:
             print(f"fail load model: {str(e)}")
             raise e
         
-    def get_action(self, observation):
-        # 根据观察获取动作
-        # observation 包含：
-        # - rgb: 当前图像
-        # - floorplan: 平面图
-        # - task_obs: 任务相关观察
-        
-        pass
+    def get_vision_encoder_feature(self, obs_img_queue, floorplan_img, obs_pos, goal_pos, obs_ori):
+        obs_img_tensor = torch.cat(obs_img_queue, dim=0).unsqueeze(0).to(self.device)  # [batch, 3*(context_size+1), 96, 96]
+        floor_plan_img_tensor = floorplan_img.unsqueeze(0).to(self.device)
+        obs_pos_tensor = torch.from_numpy(obs_pos).float().unsqueeze(0).to(self.device)
+        goal_pos_tensor = torch.from_numpy(goal_pos).float().unsqueeze(0).to(self.device)
+        obs_ori_tensor = torch.from_numpy(obs_ori).float().unsqueeze(0).to(self.device)
+
+        vision_feature = self.model(
+            "vision_encoder", 
+            obs_img=obs_img_tensor,
+            floorplan_img=floor_plan_img_tensor, 
+            obs_pos=obs_pos_tensor,
+            goal_pos=goal_pos_tensor,
+            obs_ori=obs_ori_tensor,
+        )
+        return vision_feature
     
     def update_obs_img_queue(self, obs_img):
         self.process_obs_img(obs_img)
     
     def update_floorplan_img(self, floorplan_img):
-        self.floorplan_img = floorplan_img
-    
+        self.process_floorplan_img(floorplan_img)
+        
     def update_obs_pos(self, obs_pos):
         self.obs_pos = obs_pos
     
@@ -131,7 +155,14 @@ class FloNaAgent:
         while len(self.obs_img_queue) < self.context_size + 1:
             if len(self.obs_img_queue) > 0:  # 确保队列不为空
                 self.obs_img_queue.append(self.obs_img_queue[-1].clone())
-                
+    
+    def process_floorplan_img(self, floorplan_img):
+        floorplan_img = floorplan_img.copy()
+        floorplan_img = floorplan_img.transpose(2, 0, 1)  # 转为[3, H, W]
+        floorplan_img = torch.from_numpy(floorplan_img).float() / 255.0
+        floorplan_img = self.transform(floorplan_img)
+        self.floorplan_img = floorplan_img
+
     def update_vision_input(self, obs_img, floorplan_img, obs_pos, goal_pos, obs_ori):
         self.update_obs_img_queue(obs_img)
         self.update_floorplan_img(floorplan_img)
@@ -139,6 +170,53 @@ class FloNaAgent:
         self.update_goal_pos(goal_pos)
         self.update_obs_ori(obs_ori)
     
+
+    def diffusion_to_action(self, diffusion_output):
+        device = self.device
+        ndeltas = diffusion_output
+        ndeltas = ndeltas.reshape(ndeltas.shape[0], -1, 2)
+        ndeltas = to_numpy(ndeltas)
+        ndeltas = unnormalize_data(ndeltas, ACTION_STATS)
+        actions = np.cumsum(ndeltas, axis=1)
+        return from_numpy(actions).to(device)
+    
+    def get_action(self, obs_img_queue, floorplan_img, obs_pos, goal_pos, obs_ori, metric_waipoint_spacing, waypoint_spacing):
+        # normalization_input
+        obs_pos /= metric_waipoint_spacing * waypoint_spacing
+        obs_ori /= metric_waipoint_spacing * waypoint_spacing
+        goal_pos /= metric_waipoint_spacing * waypoint_spacing
+        
+        vision_feature = self.get_vision_encoder_feature(obs_img_queue, floorplan_img, obs_pos, goal_pos, obs_ori)
+        # copy vision_feature
+        vision_feature = vision_feature.repeat_interleave(self.config['num_samples'], dim=0)
+        #initialize action from Gaussian noise
+        noisy_diffusion_output = torch.randn(len(vision_feature), 32, 2, device=self.device)
+        diffusion_output = noisy_diffusion_output
+        
+        for k in self.noise_scheduler.timesteps[:]:
+            # predict noise
+            noise_pred = self.model(
+                "noise_pred_net",
+                sample=diffusion_output,
+                timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                global_cond=vision_feature
+            )
+            
+            # inverse diffusion step(remove noise)
+            diffusion_output = self.noise_scheduler.step(
+                model_output=noise_pred,
+                timestep=k,
+                sample=diffusion_output
+            ).prev_sample
+            
+        actions = self.diffusion_to_action(diffusion_output)
+        distacne = self.model("dist_pred_net", obsgoal_cond=vision_feature)
+        
+        return {
+            "actions": actions,
+            "distances": distacne
+        }
+        
     def test_model(self):
         if self.model is None:
             print("模型未加载")
