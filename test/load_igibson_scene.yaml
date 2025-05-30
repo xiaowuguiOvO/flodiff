@@ -1,7 +1,7 @@
 # scene
 scene: gibson
 # scene_id: Albertville
-scene_id: Eudora
+scene_id: Rs
 scene_path: iGibson/igibson/data/g_dataset/
 build_graph: true
 load_texture: true
@@ -61,9 +61,9 @@ output: [task_obs, rgb, depth]
 # Intel Realsense Depth Camera D435
 # https://store.intelrealsense.com/buy-intel-realsense-depth-camera-d435.html
 fisheye: false
-image_width: 160
-image_height: 90
-vertical_fov: 42.5
+image_width: 512
+image_height: 512
+vertical_fov: 45
 # depth
 depth_low : 0.1
 depth_high: 10.0

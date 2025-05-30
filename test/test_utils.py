@@ -1,6 +1,6 @@
 import pybullet as p
 import numpy as np
-
+import math
 np.set_printoptions(precision=2, suppress=True)
 
 def draw_predicted_trajectory(trajectory, base_z=0.0):
@@ -104,12 +104,96 @@ def check_is_arrive(robot_pos, target_pos, threshold=0.1):
     # 计算欧几里得距离
     # np.linalg.norm(a - b) 计算了向量 a 和 b 之间的欧几里得距离
     distance = np.linalg.norm(robot_pos_np - target_pos_np)
+    # print(distance)
     # 判断距离是否小于阈值
     if distance < threshold:
         return True
     else:
         return False
 
+
+def compute_look_ahead_point(trajectory, robot_pos, ahead_dis=0.5):
+    # 修改检查 trajectory 是否有效的方式
+    if trajectory is None:
+        print("错误：轨迹为 None。")
+        return None
+    
+    # 对于 NumPy 数组，检查其大小 (size) 或 第一个维度 (shape[0])
+    # isinstance(trajectory, np.ndarray) 用于确认它确实是 NumPy 数组
+    if isinstance(trajectory, np.ndarray):
+        if trajectory.size == 0: # 数组中没有任何元素
+            print("错误：轨迹 NumPy 数组为空 (size is 0)。")
+            return None
+        # 或者检查行数，如果 trajectory.ndim >= 1 (至少是一维数组)
+        # if trajectory.ndim == 0: # 标量 NumPy 对象，不是轨迹
+        #     print("错误：轨迹是标量 NumPy 对象。")
+        #     return None
+        if trajectory.shape[0] == 0: # 没有路径点
+             print("错误：轨迹 NumPy 数组中没有路径点 (shape[0] is 0)。")
+             return None
+    elif not trajectory: # 对于其他序列类型 (如 Python 列表)
+        print("错误：轨迹列表为空。")
+        return None
+
+    # 确保轨迹至少有一个点可以作为回退
+    # （如果只有一个点，下面的循环不会执行，但会直接返回该点或在末尾返回）
+    if (isinstance(trajectory, np.ndarray) and trajectory.shape[0] == 1) or \
+       (not isinstance(trajectory, np.ndarray) and len(trajectory) == 1):
+        return trajectory[0] if isinstance(trajectory, list) else tuple(trajectory[0])
+
+
+    look_ahead_point = None
+    
+    # trajectory 是 NumPy 数组时，len(trajectory) 也能正确给出点的数量 (行数)
+    num_points = trajectory.shape[0] if isinstance(trajectory, np.ndarray) else len(trajectory)
+
+    for i in range(num_points - 1):
+        p1 = trajectory[i]      # 对于 NumPy 数组，p1 是一行，例如 np.array([-2.3, 0.62])
+        p2 = trajectory[i+1]
+
+        # 后续的 p1[0], p1[1] 等索引对于 NumPy 数组的行是有效的
+        seg_dx = p2[0] - p1[0]
+        seg_dy = p2[1] - p1[1]
+
+        robot_to_p1_dx = p1[0] - robot_pos[0]
+        robot_to_p1_dy = p1[1] - robot_pos[1]
+        
+        a = seg_dx * seg_dx + seg_dy * seg_dy
+        b = 2 * (robot_to_p1_dx * seg_dx + robot_to_p1_dy * seg_dy)
+        c = robot_to_p1_dx * robot_to_p1_dx + robot_to_p1_dy * robot_to_p1_dy - ahead_dis * ahead_dis
+
+        if abs(a) < 1e-9:
+            continue
+
+        discriminant = b * b - 4 * a * c
+
+        if discriminant >= 0:
+            sqrt_discriminant = math.sqrt(discriminant)
+            t1 = (-b - sqrt_discriminant) / (2 * a)
+            t2 = (-b + sqrt_discriminant) / (2 * a)
+
+            current_segment_valid_ts = []
+            if 0 <= t1 <= 1:
+                current_segment_valid_ts.append(t1)
+            # 确保 t2 不同于 t1 才添加，或者 t1 无效时添加 t2
+            if 0 <= t2 <= 1 and (abs(t1 - t2) > 1e-9 or not (0 <= t1 <= 1)):
+                 current_segment_valid_ts.append(t2)
+            
+            if current_segment_valid_ts:
+                chosen_t = max(current_segment_valid_ts)
+                # 结果点应为元组
+                look_ahead_point = (p1[0] + chosen_t * seg_dx, 
+                                    p1[1] + chosen_t * seg_dy)
+    
+    if look_ahead_point is None and num_points > 0:
+        # 如果没有找到交点，通常选择轨迹的最后一个点
+        # 确保返回的是元组
+        last_point_data = trajectory[-1]
+        look_ahead_point = tuple(last_point_data) 
+        
+    return look_ahead_point
+
+    
     
 class PDController:
     def __init__(self, Kp_lin=1.0, Kd_lin=0.1, Kp_ang=3.0, Kd_ang=0.2):
@@ -156,7 +240,7 @@ class PDController:
         
         # 应用约束：如果角度差过大，则线速度为0 (原地转向)
         v_final = v_unconstrained
-        if abs(ang_error) > np.pi / 2:  # 大于90度
+        if abs(ang_error) > np.pi / 4:  # 大于90度
             v_final = 0.0
             
         # 更新上一次的误差记录
@@ -168,6 +252,44 @@ class PDController:
         # print(ang_error, omega_unconstrained)
         # print(np.array([current_yaw, target_theta, omega_unconstrained, ang_error]))
         # print(f"current_yaw: {current_yaw:.2f},target_yaw: {target_theta:.2f} ang_error: {ang_error:.2f}, omega: {omega_unconstrained:.2f}")
-
         return [v_final, -omega_unconstrained]
 
+class CollisionMonitor:
+    def __init__(self, robot, normal_threshold=0.3, cooldown_steps=10):
+        """
+        :param robot: iGibson 中的机器人实例（比如 env.robots[0]）
+        :param normal_threshold: 法线 z 分量阈值 (|nz| > threshold 则视为地面支撑)
+        :param cooldown_steps: 冷却步数，检测到一次碰撞后，接下来 cooldown_steps 步内不再重复计数
+        """
+        self.robot = robot
+        self.normal_threshold = normal_threshold
+        self.cooldown_steps = cooldown_steps
+
+        self.last_collision_step = -cooldown_steps
+        self.collision_count = 0
+
+    def update(self, current_step):
+        """
+        每个仿真步调用一次，返回这一步是否为新碰撞：
+        :param current_step: 当前仿真步编号（整型）
+        :return: bool，True 表示这一步计入了一次新碰撞
+        """
+        # 检测是否有横向碰撞
+        collided = False
+        for body_id in self.robot.get_body_ids():
+            cps = p.getContactPoints(bodyA=body_id)
+            for cp in cps:
+                nx, ny, nz = cp[7]  # contactNormalOnB
+                if abs(nz) <= self.normal_threshold:
+                    collided = True
+                    break
+            if collided:
+                break
+
+        # 如果撞了，且已过冷却期，就计数
+        if collided and (current_step - self.last_collision_step) >= self.cooldown_steps:
+            self.collision_count += 1
+            self.last_collision_step = current_step
+            return True
+
+        return False

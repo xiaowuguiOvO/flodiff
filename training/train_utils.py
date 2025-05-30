@@ -412,7 +412,7 @@ def evaluate_flona(
             tepoch.set_postfix(loss=loss_cpu)
 
             if use_wandb:
-                wandb.log({"diffusion_eval_loss": loss})
+                wandb.log({"diffusion_eval_loss": loss_cpu})
             else:
                 print("diffusion_eval_loss", loss)
 

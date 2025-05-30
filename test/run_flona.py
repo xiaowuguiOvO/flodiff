@@ -13,7 +13,7 @@ from test_utils import *
 np.set_printoptions(precision=2, suppress=True)
 
 PREDICT_INTERVAL = 5 # 预测超时时间
-GOAL_POINT_NUM = 5
+GOAL_POINT_NUM = 16
 
 def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None, model_config_path=None):
     
@@ -42,7 +42,7 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
         action = [0, 0]
         prev_line_ids = []
         # pd controller
-        pd = PDController(Kp_lin=0.5, Kd_lin=0.00, Kp_ang=0.5, Kd_ang=0.1)
+        pd = PDController(Kp_lin=1, Kd_lin=0.0, Kp_ang=0.5, Kd_ang=0.1)
         IS_ARRIVE_FLAG = True
         IS_DECISION_FLAG = True
         goal_point_idx = 0
@@ -64,11 +64,15 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
             obs_ori=obs_ori
             )
         
+        # collision
+        collision_count = 0
+        monitor = CollisionMonitor(env.robots[0], normal_threshold=0.3, cooldown_steps=20)
         for step in range(num_steps):
 
             # take action
             state, reward, done, info = env.step(action)
             
+
             # get observation
             robot_pos = env.robots[0].get_position()[:2] # ground truth
             robot_ori = env.robots[0].get_rpy()[2] # ground truth
@@ -76,22 +80,37 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
             target_pos = env.task.target_pos[:2].copy()
             FLOOR_Z = env.task.target_pos[2]
             obs_img = state["rgb"]
-
-            # check if arrive
-            if check_is_arrive(robot_pos, goal_point, threshold=0.05):
-                # print("update state")
-                agent.update_vision_input(
+            
+            agent.update_vision_input(
                 obs_img=obs_img,
                 floorplan_img=floorplan_img,
                 obs_pos=robot_pos,
                 goal_pos=target_pos,
                 obs_ori=obs_ori
                 )
+            if monitor.update(step):
+                print(f"Step {step}: Collision detected.")
+                # 当前姿态
+                pos = env.robots[0].get_position()      # [x, y, z]
+                rpy = list(env.robots[0].get_rpy())    # [roll, pitch, yaw]
+                # 顺时针 45°（注意 PyBullet 的正 yaw 是逆时针，这里减号表示顺时针）
+                rpy[2] = rpy[2] - math.pi/4
+                # 直接“瞬移”到新的朝向（保持位置不变）
+                env.robots[0].set_rpy(rpy)
+                # 标记强制重新决策
+                IS_DECISION_FLAG = True
+                # 清空旧的 trajectory，保证下次规划使用新航向
+                trajectory = np.zeros((GOAL_POINT_NUM, 2))
+                # 跳过下面的 PD 控制，直接进入下一步循环
+                continue
+            
+            # check if arrive
+            if check_is_arrive(robot_pos, goal_point, threshold=0.4):
+                # print("update state")
+
                 IS_ARRIVE_FLAG = False
-                goal_point_idx += 1
-                if goal_point_idx >= GOAL_POINT_NUM:
                 # print(f"Robot arrived at the target position: {target_pos}.")
-                    IS_DECISION_FLAG = True
+                IS_DECISION_FLAG = True
 
             # check time interval for decision making
             if not IS_ARRIVE_FLAG and (time.time() - last_predict_time >= PREDICT_INTERVAL):
@@ -122,13 +141,15 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 goal_point_idx = 0
             
             # print(robot_pos, goal_point)
-            
             # pd control
             now = time.time()
             dt = now - prev_time
             prev_time = now
-            goal_point = trajectory[goal_point_idx]
-            action = pd.compute(robot_pos, robot_ori, goal_point, dt)
+            goal_point = trajectory[GOAL_POINT_NUM - 1]
+            look_ahead_point = compute_look_ahead_point(trajectory, robot_pos, ahead_dis=0.3)
+            # print(look_ahead_point)
+            # print(action[0])
+            action = pd.compute(robot_pos, robot_ori, look_ahead_point, dt)
             # action = [0, 0]
             # action[0] = 0
             # print(robot_ori)
@@ -148,9 +169,9 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO) 
     run_headless = False       
 
-    model_path = "checkpoints\ema_9.pth" # 模型路径
+    model_path = "checkpoints\ema_67_1.pth" # 模型路径
     scene_config_path = "test/load_igibson_scene.yaml"
     model_config_path = 'flona.yaml'
     model_config = None
     
-    main(headless=run_headless, num_episodes=15, num_steps=2000, scene_config_path=scene_config_path, model_config_path=model_config_path)
+    main(headless=run_headless, num_episodes=15, num_steps=200, scene_config_path=scene_config_path, model_config_path=model_config_path)
