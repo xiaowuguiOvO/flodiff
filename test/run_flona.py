@@ -14,7 +14,8 @@ np.set_printoptions(precision=2, suppress=True)
 
 PREDICT_INTERVAL = 5 # 预测超时时间
 GOAL_POINT_NUM = 16
-
+MATRIX_WAYPOINT_SPACING = 0.1
+WAYPOINT_SPACING = 1.0
 def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None, model_config_path=None):
     
     env_mode = "headless" if headless else "gui_interactive"
@@ -30,15 +31,16 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
     with open(model_config_path, 'r') as f:
         model_config = yaml.safe_load(f)
     
-    agent = FloNaAgent.FloNaAgent(model_path=model_path, config=model_config)
+    agent = FloNaAgent.FloNaAgent(model_path=model_path, model_config=model_config, scene_config=scene_config, metric_waypoint_spacing=MATRIX_WAYPOINT_SPACING, waypoint_spacing=WAYPOINT_SPACING)
 
     for episode in range(num_episodes):
         print(f"--- Episode: {episode + 1} ---")
         # 重置环境，获取初始观察值
         observation = env.reset()
-        floorplan_img_path = os.path.join(scene_config["scene_path"], scene_config["scene_id"], 'floor_0.png')
+        floorplan_img_path = os.path.join(scene_config["scene_path"], scene_config["scene_id"], 'floorplan.png')
         print(f"floorplan_img_path: {floorplan_img_path}")
         floorplan_img = cv2.imread(floorplan_img_path)
+        floorplan_img = cv2.cvtColor(floorplan_img, cv2.COLOR_BGR2RGB)
         action = [0, 0]
         prev_line_ids = []
         # pd controller
@@ -123,14 +125,13 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
 
                 last_predict_time = time.time()
                 # predict
-                metric_waipoint_spacing = 0.1
-                waypoint_spacing = 1.0
-                output = agent.get_action(agent.obs_img_queue, agent.floorplan_img, agent.obs_pos, agent.goal_pos, agent.obs_ori, metric_waipoint_spacing, waypoint_spacing)
+  
+                output = agent.get_action(agent.obs_img_queue, agent.floorplan_img, agent.obs_pos, agent.goal_pos, agent.obs_ori, MATRIX_WAYPOINT_SPACING, WAYPOINT_SPACING)
                 actions = output["actions"].mean(dim=0)
                 # print(actions.shape)
                 actions_normed_global = to_global_coords(actions.cpu().numpy(), agent.obs_pos, agent.obs_ori)
                 actions_meter_global = actions_normed_global
-                actions_meter_global = actions_normed_global * metric_waipoint_spacing * waypoint_spacing
+                actions_meter_global = actions_normed_global * MATRIX_WAYPOINT_SPACING * WAYPOINT_SPACING
                 # print(actions_normed_global.shape)
                 # print(actions)
                 
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO) 
     run_headless = False       
 
-    model_path = "checkpoints\ema_67_2.pth" # 模型路径
+    model_path = "checkpoints\ema_67_1.pth" # 模型路径
     scene_config_path = "test/load_igibson_scene.yaml"
     model_config_path = 'flona.yaml'
     model_config = None

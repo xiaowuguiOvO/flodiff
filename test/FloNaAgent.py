@@ -11,14 +11,18 @@ from training.train_utils import unnormalize_data, to_numpy, from_numpy
 from diffusers.training_utils import EMAModel
 import os
 import torchvision.transforms.functional as TF
+import cv2
 ACTION_STATS = {}
 ACTION_STATS["min"] = np.array([-2.5, -4])
 ACTION_STATS["max"] = np.array([5, 4])   
 class FloNaAgent:
-    def __init__(self, model_path=None, config=None):
+    def __init__(self, model_path=None, model_config=None,scene_config=None, metric_waypoint_spacing=0.045, waypoint_spacing=1):
         # 初始化模型
+        self.metric_waypoint_spacing = metric_waypoint_spacing
+        self.waypoint_spacing = waypoint_spacing
         self.model = None
-        self.config = config
+        self.model_config = model_config
+        self.scene_config = scene_config
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         self.transform = transforms.Compose([
@@ -26,7 +30,7 @@ class FloNaAgent:
                               std=[0.229, 0.224, 0.225])
         ])
         
-        self.context_size = config["context_size"]
+        self.context_size = model_config["context_size"]
         self.noise_scheduler = None
         self.vision_encoder = None
         self.noise_pred_net = None
@@ -53,7 +57,7 @@ class FloNaAgent:
         self.obsgoal_cond = None # [batch, encoding_size]
         
         # floorplan and obs transfer
-        trav_folder = config["trav_folder"]
+        trav_folder = model_config["datasets"]["trav_map_folder"]
         self.floor_shapes_ori =  np.load(os.path.join(trav_folder, "floor_shapes.npy"), allow_pickle=True).item()
         
     def build_model(self, config):
@@ -98,7 +102,7 @@ class FloNaAgent:
         # 加载训练好的模型
         try:
             checkpoint = torch.load(model_path, map_location=self.device)
-            self.model = self.build_model(self.config)
+            self.model = self.build_model(self.model_config)
             missing, unexpected = self.model.load_state_dict(checkpoint, strict=False)
             self.model = EMAModel(
                 self.model,
@@ -151,16 +155,17 @@ class FloNaAgent:
         goal_pos_metric = goal_pos * metric_waypoint_spacing * waypoint_spacing
         cur_ori_metric = cur_ori * metric_waypoint_spacing * waypoint_spacing
         
-        scene_name = self.config['scene_name']
+        scene_name = self.scene_config['scene_id'] + '_' + str(self.scene_config['floor_num'])
         ori_size = self.floor_shapes_ori[scene_name]
         w0 = ori_size
         h0 = ori_size
-        w, h = img.size
+        # w, h = img.size
         cur_pos = cur_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
         goal_pos = goal_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
         cur_ori = cur_ori_metric * 100 + np.array([w0 / 2, h0 / 2])
         
-        img = img.resize(image_resize_size)
+        img = cv2.resize(img, image_resize_size)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         cur_pos_in_resizeSize = cur_pos * image_resize_size[0] / w0
         goal_pos_in_resizeSize = goal_pos * image_resize_size[0] / w0
         cur_ori_in_resizeSize = cur_ori * image_resize_size[0] / w0       
@@ -170,7 +175,7 @@ class FloNaAgent:
     
     def process_obs_img(self, obs_img):
         obs_img = obs_img.copy()
-        obs_img = self.process_obs_floorplan_to_input(obs_img, self.obs_pos, self.goal_pos, self.obs_ori, self.config['metric_waipoint_spacing'], self.config['waypoint_spacing'], (96, 96))[0]
+        obs_img = self.process_obs_floorplan_to_input(obs_img, self.obs_pos, self.goal_pos, self.obs_ori, self.metric_waypoint_spacing, self.waypoint_spacing, (96, 96))[0]
         self.obs_img_queue.append(obs_img)
         
         if len(self.obs_img_queue) > self.context_size + 1:
@@ -182,7 +187,7 @@ class FloNaAgent:
     
     def process_floorplan_img(self, floorplan_img):
         floorplan_img = floorplan_img.copy()
-        floorplan_img = self.process_obs_floorplan_to_input(floorplan_img, self.obs_pos, self.goal_pos, self.obs_ori, self.config['metric_waipoint_spacing'], self.config['waypoint_spacing'], (96, 96))[0]
+        floorplan_img = self.process_obs_floorplan_to_input(floorplan_img, self.obs_pos, self.goal_pos, self.obs_ori, self.metric_waypoint_spacing, self.waypoint_spacing, (96, 96))[0]
         self.floorplan_img = floorplan_img
 
     def update_vision_input(self, obs_img, floorplan_img, obs_pos, goal_pos, obs_ori):
@@ -210,7 +215,7 @@ class FloNaAgent:
         
         vision_feature = self.get_vision_encoder_feature(obs_img_queue, floorplan_img, obs_pos, goal_pos, obs_ori)
         # copy vision_feature
-        vision_feature = vision_feature.repeat_interleave(self.config['num_samples'], dim=0)
+        vision_feature = vision_feature.repeat_interleave(self.model_config['num_samples'], dim=0)
         #initialize action from Gaussian noise
         noisy_diffusion_output = torch.randn(len(vision_feature), 32, 2, device=self.device)
         diffusion_output = noisy_diffusion_output

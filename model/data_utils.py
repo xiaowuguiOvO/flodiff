@@ -189,4 +189,3 @@ def img_path_to_data_and_point_transfer(path: Union[str, io.BytesIO], ori_size: 
         resize_img = TF.to_tensor(img)
         
         return (resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize)
-

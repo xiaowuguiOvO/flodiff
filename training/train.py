@@ -1,5 +1,4 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 import argparse
 import yaml
 import time
@@ -211,7 +210,7 @@ if __name__ == "__main__":
         wandb.login()
         wandb.init(
             project=config["project_name"],
-            settings=wandb.Settings(start_method="fork"),          
+            settings=wandb.Settings(start_method="thread"),          
         )
         wandb.save(args.config, policy="now")  # save the config file
         wandb.run.name = config["run_name"]
