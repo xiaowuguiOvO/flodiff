@@ -9,6 +9,8 @@ from model.flona import DenseNetwork
 import numpy as np
 from training.train_utils import unnormalize_data, to_numpy, from_numpy
 from diffusers.training_utils import EMAModel
+import os
+import torchvision.transforms.functional as TF
 ACTION_STATS = {}
 ACTION_STATS["min"] = np.array([-2.5, -4])
 ACTION_STATS["max"] = np.array([5, 4])   
@@ -19,9 +21,7 @@ class FloNaAgent:
         self.config = config
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        # 初始化model配置
         self.transform = transforms.Compose([
-            transforms.Resize((96, 96)),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], 
                               std=[0.229, 0.224, 0.225])
         ])
@@ -51,6 +51,10 @@ class FloNaAgent:
         
         # dist_pred_net
         self.obsgoal_cond = None # [batch, encoding_size]
+        
+        # floorplan and obs transfer
+        trav_folder = config["trav_folder"]
+        self.floor_shapes_ori =  np.load(os.path.join(trav_folder, "floor_shapes.npy"), allow_pickle=True).item()
         
     def build_model(self, config):
         vision_encoder = flona_ViNT(
@@ -142,11 +146,31 @@ class FloNaAgent:
     def update_obs_ori(self, obs_ori):
         self.obs_ori = obs_ori
     
+    def process_obs_floorplan_to_input(self, img, cur_pos, goal_pos, cur_ori, metric_waypoint_spacing, waypoint_spacing, image_resize_size):
+        cur_pos_metric = cur_pos * metric_waypoint_spacing * waypoint_spacing # trans from waypoints to meters
+        goal_pos_metric = goal_pos * metric_waypoint_spacing * waypoint_spacing
+        cur_ori_metric = cur_ori * metric_waypoint_spacing * waypoint_spacing
+        
+        scene_name = self.config['scene_name']
+        ori_size = self.floor_shapes_ori[scene_name]
+        w0 = ori_size
+        h0 = ori_size
+        w, h = img.size
+        cur_pos = cur_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
+        goal_pos = goal_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
+        cur_ori = cur_ori_metric * 100 + np.array([w0 / 2, h0 / 2])
+        
+        img = img.resize(image_resize_size)
+        cur_pos_in_resizeSize = cur_pos * image_resize_size[0] / w0
+        goal_pos_in_resizeSize = goal_pos * image_resize_size[0] / w0
+        cur_ori_in_resizeSize = cur_ori * image_resize_size[0] / w0       
+        resize_img = TF.to_tensor(img)
+        
+        return (resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize)
+    
     def process_obs_img(self, obs_img):
         obs_img = obs_img.copy()
-        obs_img = obs_img.transpose(2, 0, 1)  # 转为[3, H, W]
-        obs_img = torch.from_numpy(obs_img).float() / 255.0 
-        obs_img = self.transform(obs_img)
+        obs_img = self.process_obs_floorplan_to_input(obs_img, self.obs_pos, self.goal_pos, self.obs_ori, self.config['metric_waipoint_spacing'], self.config['waypoint_spacing'], (96, 96))[0]
         self.obs_img_queue.append(obs_img)
         
         if len(self.obs_img_queue) > self.context_size + 1:
@@ -158,18 +182,16 @@ class FloNaAgent:
     
     def process_floorplan_img(self, floorplan_img):
         floorplan_img = floorplan_img.copy()
-        floorplan_img = floorplan_img.transpose(2, 0, 1)  # 转为[3, H, W]
-        floorplan_img = torch.from_numpy(floorplan_img).float() / 255.0
-        floorplan_img = self.transform(floorplan_img)
+        floorplan_img = self.process_obs_floorplan_to_input(floorplan_img, self.obs_pos, self.goal_pos, self.obs_ori, self.config['metric_waipoint_spacing'], self.config['waypoint_spacing'], (96, 96))[0]
         self.floorplan_img = floorplan_img
 
     def update_vision_input(self, obs_img, floorplan_img, obs_pos, goal_pos, obs_ori):
-        self.update_obs_img_queue(obs_img)
-        self.update_floorplan_img(floorplan_img)
         self.update_obs_pos(obs_pos)
         self.update_goal_pos(goal_pos)
         self.update_obs_ori(obs_ori)
-    
+
+        self.update_obs_img_queue(obs_img)
+        self.update_floorplan_img(floorplan_img)
 
     def diffusion_to_action(self, diffusion_output):
         device = self.device

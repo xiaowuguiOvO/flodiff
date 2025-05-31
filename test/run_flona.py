@@ -36,7 +36,7 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
         print(f"--- Episode: {episode + 1} ---")
         # 重置环境，获取初始观察值
         observation = env.reset()
-        floorplan_img_path = os.path.join(scene_config["scene_path"], scene_config["scene_id"], 'floorplan.png')
+        floorplan_img_path = os.path.join(scene_config["scene_path"], scene_config["scene_id"], 'floor_0.png')
         print(f"floorplan_img_path: {floorplan_img_path}")
         floorplan_img = cv2.imread(floorplan_img_path)
         action = [0, 0]
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO) 
     run_headless = False       
 
-    model_path = "checkpoints\ema_67_1.pth" # 模型路径
+    model_path = "checkpoints\ema_67_2.pth" # 模型路径
     scene_config_path = "test/load_igibson_scene.yaml"
     model_config_path = 'flona.yaml'
     model_config = None

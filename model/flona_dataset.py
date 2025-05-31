@@ -7,7 +7,7 @@ import tqdm
 import lmdb
 import torch
 from torch.utils.data import Dataset
-
+import cv2
 
 from .data_utils import (
     img_path_to_data,
@@ -288,7 +288,16 @@ class flona_Dataset(Dataset):
         actions, goal_pos, cur_pos, cur_ori, goal_pos_local, cur_pos_local = self._compute_actions(curr_traj_data, curr_time, goal_time)   # waypoints(steps) metric in local        
         # Load goal image
         floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized  = self._load_image_and_transform_points(scene_name_cur, f_curr, cur_pos, goal_pos, cur_ori, "floorplan")
-
+        print(floorplan_image.shape)
+        # visualization
+        
+        # floorplan_np = floorplan_image.cpu().numpy()
+        # floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
+        # floorplan_np = (floorplan_np * 255).astype(np.uint8)
+        # floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
+        # cv2.imshow('floorplan', floorplan_np_bgr)
+        # cv2.waitKey(1)  # 添加等待时间
+        
         # Compute distances
         # distance = (len(curr_traj_data) - self.end_slack - curr_time) // self.waypoint_spacing
         distance = (goal_time - curr_time) // self.waypoint_spacing
