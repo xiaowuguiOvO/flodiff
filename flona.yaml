@@ -7,7 +7,7 @@ train: True
 batch_size: 128  #1
 epochs: 10
 gpu_ids: [0]     # 1
-num_workers: 14  #1
+num_workers: 8  #1
 lr: 1e-4
 optimizer: adamw
 max_norm: 1.
@@ -15,6 +15,7 @@ scheduler: "cosine"
 warmup: True 
 warmup_epochs: 4
 seed: 0
+load_index: false
 # load_run: "flona/flona_2024_10_19_09_11_57"
 
 # =====model params=====
@@ -39,7 +40,8 @@ datasets:
   trav_map_folder: 'datasets/trav_maps'
   end_slack: 3 
   waypoint_spacing: 1  # 1
-  scene_names: [Albertville_0, Mosinee_0, Pleasant_0, Roxboro_0, Spencerville_0, Albertville_1, Azusa_1, Colebrook_0, Eagerville_0, Hainesburg_1, Lovilia_0, Mosquito_0, Plessis_0,  Eastville_0, Hambleton_0, Lovilia_1, Mosquito_1, Quantico_0, Sanctuary_0, Springhill_0, Anaheim_1, Ballou_1, Convoy_0, Edgemere_0, Haxtun_0, Maben_0, Nicut_0, Rabbit_0, Sands_0, Crandon_0, Espanola_0,  Sumas_0, Angiola_0, Bonfield_0, Crandon_1, Eudora_0, Hometown_0, Mesic_0, Nuevo_0, Ribera_0, Seward_0, Superior_0, Mesic_1, Oyens_0, Roane_0, Shelbiana_0, Cantwell_0, Delton_0, Goffs_0, Kerrtown_0, Monson_0, Parole_0, Roeville_0, Silas_0, Arkansaw_1, Capistrano_0, Denmark_0, Goffs_1, Ladue_0, Monson_1, Dryville_0, Greigsville_0, Ladue_1, Morris_0, Placida_0, Rosser_0, Sodaville_0] #67
+  scene_names:   [Albertville_0, Mosinee_0, Pleasant_0, Roxboro_0, Spencerville_0, Albertville_1, Azusa_1, Colebrook_0, Eagerville_0, Hainesburg_1, Lovilia_0, Mosquito_0, Plessis_0,  Eastville_0, Hambleton_0, Lovilia_1, Mosquito_1, Quantico_0, Sanctuary_0, Springhill_0, Anaheim_1, Ballou_1, Convoy_0, Edgemere_0, Haxtun_0, Maben_0, Nicut_0, Rabbit_0, Sands_0, Crandon_0, Espanola_0,  Sumas_0, Angiola_0, Bonfield_0, Crandon_1, Eudora_0, Hometown_0, Mesic_0, Nuevo_0, Ribera_0, Seward_0, Superior_0, Mesic_1, Oyens_0, Roane_0, Shelbiana_0, Cantwell_0, Delton_0, Goffs_0, Kerrtown_0, Monson_0, Parole_0, Roeville_0, Silas_0, Arkansaw_1, Capistrano_0, Denmark_0, Goffs_1, Ladue_0, Monson_1, Dryville_0, Greigsville_0, Ladue_1, Morris_0, Placida_0, Rosser_0, Sodaville_0] #67
+  # [Albertville_0] 
   # [Eudora_0, Hillsdale_1, Mosquito_1, Roane_0, Stilwell_0]
   # [Albertville_0, Mosinee_0, Pleasant_0, Roxboro_0, Spencerville_0, Albertville_1, Azusa_1, Colebrook_0, Eagerville_0, Hainesburg_1, Lovilia_0, Mosquito_0, Plessis_0,  Eastville_0, Hambleton_0, Lovilia_1, Mosquito_1, Quantico_0, Sanctuary_0, Springhill_0, Anaheim_1, Ballou_1, Convoy_0, Edgemere_0, Haxtun_0, Maben_0, Nicut_0, Rabbit_0, Sands_0, Crandon_0, Espanola_0,  Sumas_0, Angiola_0, Bonfield_0, Crandon_1, Eudora_0, Hometown_0, Mesic_0, Nuevo_0, Ribera_0, Seward_0, Superior_0, Mesic_1, Oyens_0, Roane_0, Shelbiana_0, Cantwell_0, Delton_0, Goffs_0, Kerrtown_0, Monson_0, Parole_0, Roeville_0, Silas_0, Arkansaw_1, Capistrano_0, Denmark_0, Goffs_1, Ladue_0, Monson_1, Dryville_0, Greigsville_0, Ladue_1, Morris_0, Placida_0, Rosser_0, Sodaville_0]
   # [Albertville_0, Azusa_1, Eagerville_0,  Plessis_0,  Eastville_0, Hambleton_0, Quantico_0, Sanctuary_0, Springhill_0, Sands_0, Crandon_0, Espanola_0, Nuevo_0, Ribera_0, Seward_0, Superior_0, Mesic_1, Goffs_0, Kerrtown_0, Monson_0, Roeville_0, Silas_0, Denmark_0, Goffs_1, Ladue_0, Ladue_1, Morris_0, Placida_0, Rosser_0, Sodaville_0] 30
