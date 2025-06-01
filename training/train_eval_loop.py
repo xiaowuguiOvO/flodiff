@@ -1,7 +1,7 @@
 import os
 from typing import List, Optional, Dict
 
-import wandb
+import swanlab
 import numpy as np
 import torch
 import torch.nn as nn
@@ -26,12 +26,12 @@ def train_eval_loop_flona(
     device: torch.device,
     project_folder: str,
     print_log_freq: int = 100,
-    wandb_log_freq: int = 10,
+    swanlab_log_freq: int = 10,
     image_log_freq: int = 1000,
     num_images_log: int = 8,
     current_epoch: int = 0,
     alpha: float = 1e-4,
-    use_wandb: bool = True,
+    use_swanlab: bool = True,
     eval_fraction: float = 0.25,
     eval_freq: int = 1,
 ):
@@ -49,13 +49,13 @@ def train_eval_loop_flona(
         epochs: number of epochs to train
         device: device to train on
         project_folder: folder to save checkpoints and logs
-        wandb_log_freq: frequency of logging to wandb
+        swanlab_log_freq: frequency of logging to swanlab
         print_log_freq: frequency of printing to console
-        image_log_freq: frequency of logging images to wandb
-        num_images_log: number of images to log to wandb
+        image_log_freq: frequency of logging images to swanlab
+        num_images_log: number of images to log to swanlab
         current_epoch: epoch to start training from
         alpha: tradeoff between distance and action loss
-        use_wandb: whether to log to wandb or not
+        use_swanlab: whether to log to swanlab or not
         eval_fraction: fraction of training data to use for evaluation
         eval_freq: frequency of evaluation
     """
@@ -79,10 +79,10 @@ def train_eval_loop_flona(
                 project_folder=project_folder,
                 epoch=epoch,
                 print_log_freq=print_log_freq,
-                wandb_log_freq=wandb_log_freq,
+                swanlab_log_freq=swanlab_log_freq,
                 image_log_freq=image_log_freq,
                 num_images_log=num_images_log,
-                use_wandb=use_wandb,
+                use_swanlab=use_swanlab,
                 alpha=alpha,
             )
             lr_scheduler.step()
@@ -123,11 +123,11 @@ def train_eval_loop_flona(
                 epoch=epoch,
                 print_log_freq=print_log_freq,
                 num_images_log=num_images_log,
-                wandb_log_freq=wandb_log_freq,
-                use_wandb=use_wandb,
+                swanlab_log_freq=swanlab_log_freq,
+                use_swanlab=use_swanlab,
                 eval_fraction=eval_fraction,
             )
-        wandb.log({
+        swanlab.log({
             "lr": optimizer.param_groups[0]["lr"],
         }, commit=False)
 
@@ -135,14 +135,14 @@ def train_eval_loop_flona(
             lr_scheduler.step()
 
         # log average eval loss
-        wandb.log({}, commit=False)
+        swanlab.log({}, commit=False)
 
-        wandb.log({
+        swanlab.log({
             "lr": optimizer.param_groups[0]["lr"],
         }, commit=False)
        
     # Flush the last set of eval logs
-    wandb.log({})
+    swanlab.log({})
     print()
 
 def load_model(model, checkpoint: dict) -> None:

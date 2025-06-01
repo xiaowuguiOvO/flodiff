@@ -228,9 +228,9 @@ def train_flona(
             # Logging
             loss_cpu = loss.item()
             tepoch.set_postfix(loss=loss_cpu)
-            # swanlab.log({"total_loss": loss_cpu})
-            # swanlab.log({"dist_loss": dist_loss.item()})
-            # swanlab.log({"diffusion_loss": diffusion_loss.item()})
+            swanlab.log({"total_loss": loss_cpu})
+            swanlab.log({"dist_loss": dist_loss.item()})
+            swanlab.log({"diffusion_loss": diffusion_loss.item()})
 
 
             if i % print_log_freq == 0:
@@ -259,7 +259,7 @@ def train_flona(
                         print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
 
                 if use_swanlab and i % swanlab_log_freq == 0 and swanlab_log_freq != 0:
-                    swanlab.log(data_log, commit=True)
+                    swanlab.log(data_log)
             
             if image_log_freq != 0 and i % image_log_freq == 0:
                 visualize_diffusion_action_distribution(
@@ -442,7 +442,7 @@ def evaluate_flona(
                         print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
 
                 if use_swanlab and i % swanlab_log_freq == 0 and swanlab_log_freq != 0:
-                    swanlab.log(data_log, commit=True)
+                    swanlab.log(data_log)
             
             if image_log_freq != 0 and i % image_log_freq == 0:
                 visualize_diffusion_action_distribution(
@@ -819,10 +819,10 @@ def visualize_diffusion_action_distribution(
         fig.set_size_inches(18.5, 10.5)
         save_path = os.path.join(visualize_path, f"sample_{i}.png")
         plt.savefig(save_path)
-        # swanlab_list.append(swanlab.Image(save_path))
+        swanlab_list.append(swanlab.Image(save_path))
         plt.close(fig)
     if len(swanlab_list) > 0 and use_swanlab:
-        swanlab.log({f"{type}_action_samples": swanlab_list}, commit=False)
+        swanlab.log({f"{type}_action_samples": swanlab_list})
 
 def plot_trajs_and_points(
     ax: plt.Axes,

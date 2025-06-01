@@ -178,7 +178,7 @@ def main(config):
         num_images_log=config["num_images_log"],
         current_epoch=current_epoch,
         alpha=float(config["alpha"]),
-        use_swanlab=config["swanlab"],
+        use_swanlab=config["use_swanlab"],
         eval_fraction=config["eval_fraction"],
         eval_freq=config["eval_freq"],
     )
@@ -213,7 +213,7 @@ if __name__ == "__main__":
             project=config["project_name"],
             settings=swanlab.Settings(start_method="thread"),          
         )
-        swanlab.save(args.config, policy="now")  # save the config file
+        # swanlab.save(args.config, policy="now")  # save the config file
         swanlab.run.name = config["run_name"]
         # update the swanlab args with the training configurations
         if swanlab.run:
