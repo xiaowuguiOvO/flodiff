@@ -7,7 +7,7 @@ from typing import  Optional
 import tqdm
 import numpy as np
 import yaml
-import wandb
+import swanlab
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.training_utils import EMAModel
 import torch
@@ -108,10 +108,10 @@ def train_flona(
     epoch: int,
     alpha: float = 1e-4,
     print_log_freq: int = 100,
-    wandb_log_freq: int = 10,
+    swanlab_log_freq: int = 10,
     image_log_freq: int = 1000,
     num_images_log: int = 8,
-    use_wandb: bool = True,
+    use_swanlab: bool = True,
 ):
     """
     Train the model for one epoch.
@@ -128,10 +128,10 @@ def train_flona(
         epoch: current epoch
         alpha: weight of action loss
         print_log_freq: how often to print loss
-        wand_log_freq: how often to log to wandb
+        wand_log_freq: how often to log to swanlab
         image_log_freq: how often to log images
         num_images_log: number of images to log
-        use_wandb: whether to use wandb
+        use_swanlab: whether to use swanlab
     """
     model.train()
     num_batches = len(dataloader)
@@ -228,9 +228,9 @@ def train_flona(
             # Logging
             loss_cpu = loss.item()
             tepoch.set_postfix(loss=loss_cpu)
-            # wandb.log({"total_loss": loss_cpu})
-            # wandb.log({"dist_loss": dist_loss.item()})
-            # wandb.log({"diffusion_loss": diffusion_loss.item()})
+            # swanlab.log({"total_loss": loss_cpu})
+            # swanlab.log({"dist_loss": dist_loss.item()})
+            # swanlab.log({"diffusion_loss": diffusion_loss.item()})
 
 
             if i % print_log_freq == 0:
@@ -258,8 +258,8 @@ def train_flona(
                     if i % print_log_freq == 0 and print_log_freq != 0:
                         print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
 
-                if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
-                    wandb.log(data_log, commit=True)
+                if use_swanlab and i % swanlab_log_freq == 0 and swanlab_log_freq != 0:
+                    swanlab.log(data_log, commit=True)
             
             if image_log_freq != 0 and i % image_log_freq == 0:
                 visualize_diffusion_action_distribution(
@@ -284,7 +284,7 @@ def train_flona(
                     epoch,
                     num_images_log,
                     30,
-                    use_wandb,
+                    use_swanlab,
                 )
 
 def evaluate_flona(
@@ -296,11 +296,11 @@ def evaluate_flona(
     project_folder: str,
     epoch: int,
     print_log_freq: int = 100,
-    wandb_log_freq: int = 10,
+    swanlab_log_freq: int = 10,
     image_log_freq: int = 1000,
     num_images_log: int = 8,
     eval_fraction: float = 0.25,
-    use_wandb: bool = True,
+    use_swanlab: bool = True,
 ):
     """
     Evaluate the model on the given evaluation dataset.
@@ -314,11 +314,11 @@ def evaluate_flona(
         project_folder (string): path to project folder
         epoch (int): current epoch
         print_log_freq (int): how often to print logs 
-        wandb_log_freq (int): how often to log to wandb
+        swanlab_log_freq (int): how often to log to swanlab
         image_log_freq (int): how often to log images
         num_images_log (int): number of images to log
         eval_fraction (float): fraction of data to use for evaluation
-        use_wandb (bool): whether to use wandb for logging
+        use_swanlab (bool): whether to use swanlab for logging
     """
     ema_model = ema_model.averaged_model
     ema_model.eval()
@@ -411,8 +411,8 @@ def evaluate_flona(
             loss_cpu = loss.item()
             tepoch.set_postfix(loss=loss_cpu)
 
-            if use_wandb:
-                wandb.log({"diffusion_eval_loss": loss_cpu})
+            if use_swanlab:
+                swanlab.log({"diffusion_eval_loss": loss_cpu})
             else:
                 print("diffusion_eval_loss", loss)
 
@@ -441,8 +441,8 @@ def evaluate_flona(
                     if i % print_log_freq == 0 and print_log_freq != 0:
                         print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
 
-                if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
-                    wandb.log(data_log, commit=True)
+                if use_swanlab and i % swanlab_log_freq == 0 and swanlab_log_freq != 0:
+                    swanlab.log(data_log, commit=True)
             
             if image_log_freq != 0 and i % image_log_freq == 0:
                 visualize_diffusion_action_distribution(
@@ -467,7 +467,7 @@ def evaluate_flona(
                     epoch,
                     num_images_log,
                     30,
-                    use_wandb,
+                    use_swanlab,
                 )
     
 def execute_model(
@@ -707,7 +707,7 @@ def visualize_diffusion_action_distribution(
     epoch: int,
     num_images_log: int,
     num_samples: int = 30,
-    use_wandb: bool = True,
+    use_swanlab: bool = True,
 ):
     """Plot samples from the exploration model."""
 
@@ -733,7 +733,7 @@ def visualize_diffusion_action_distribution(
     batch_goal_pos_resized = batch_goal_pos_resized[:num_images_log]
     batch_curr_pos_resized = batch_curr_pos_resized[:num_images_log]
     batch_curr_ori_resized = batch_curr_ori_resized[:num_images_log]
-    wandb_list = []
+    swanlab_list = []
 
     pred_horizon = batch_action_label.shape[1]
     action_dim = batch_action_label.shape[2]
@@ -819,10 +819,10 @@ def visualize_diffusion_action_distribution(
         fig.set_size_inches(18.5, 10.5)
         save_path = os.path.join(visualize_path, f"sample_{i}.png")
         plt.savefig(save_path)
-        # wandb_list.append(wandb.Image(save_path))
+        # swanlab_list.append(swanlab.Image(save_path))
         plt.close(fig)
-    if len(wandb_list) > 0 and use_wandb:
-        wandb.log({f"{type}_action_samples": wandb_list}, commit=False)
+    if len(swanlab_list) > 0 and use_swanlab:
+        swanlab.log({f"{type}_action_samples": swanlab_list}, commit=False)
 
 def plot_trajs_and_points(
     ax: plt.Axes,

@@ -12,9 +12,12 @@ from diffusers.training_utils import EMAModel
 import os
 import torchvision.transforms.functional as TF
 import cv2
+from PIL import Image
+from typing import Tuple
 ACTION_STATS = {}
 ACTION_STATS["min"] = np.array([-2.5, -4])
 ACTION_STATS["max"] = np.array([5, 4])   
+
 class FloNaAgent:
     def __init__(self, model_path=None, model_config=None,scene_config=None, metric_waypoint_spacing=0.045, waypoint_spacing=1):
         # 初始化模型
@@ -173,9 +176,25 @@ class FloNaAgent:
         
         return (resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize)
     
+    def resize_and_aspect_crop_img(self, obs_img: np.ndarray, image_resize_size: Tuple[int, int], aspect_ratio: float = 1.0):
+        img = Image.fromarray(obs_img.astype(np.uint8))
+        w, h = img.size
+        if w > h:
+            crop_height = h
+            crop_width = int(h * aspect_ratio)
+            img = TF.center_crop(img, (crop_height, crop_width))
+        else:
+            # 如果高度大于或等于宽度，保持宽度不变，裁剪高度
+            crop_width = w
+            crop_height = int(w / aspect_ratio)
+            img = TF.center_crop(img, (crop_height, crop_width))
+        img = img.resize(image_resize_size)
+        resize_img = TF.to_tensor(img)
+        
+        return resize_img
     def process_obs_img(self, obs_img):
         obs_img = obs_img.copy()
-        obs_img = self.process_obs_floorplan_to_input(obs_img, self.obs_pos, self.goal_pos, self.obs_ori, self.metric_waypoint_spacing, self.waypoint_spacing, (96, 96))[0]
+        obs_img = self.resize_and_aspect_crop_img(obs_img, (96, 96))
         self.obs_img_queue.append(obs_img)
         
         if len(self.obs_img_queue) > self.context_size + 1:
@@ -184,12 +203,20 @@ class FloNaAgent:
         while len(self.obs_img_queue) < self.context_size + 1:
             if len(self.obs_img_queue) > 0:  # 确保队列不为空
                 self.obs_img_queue.append(self.obs_img_queue[-1].clone())
-    
+
+        
     def process_floorplan_img(self, floorplan_img):
         floorplan_img = floorplan_img.copy()
         floorplan_img = self.process_obs_floorplan_to_input(floorplan_img, self.obs_pos, self.goal_pos, self.obs_ori, self.metric_waypoint_spacing, self.waypoint_spacing, (96, 96))[0]
         self.floorplan_img = floorplan_img
-
+        floorplan_np = floorplan_img.cpu().numpy()
+        floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
+        floorplan_np = (floorplan_np * 255).astype(np.uint8)
+        floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
+        # print(floorplan_np_bgr.shape)
+        # cv2.imshow('floorplan', floorplan_np_bgr)
+        # cv2.waitKey(1)  # 添加等待时间
+        
     def update_vision_input(self, obs_img, floorplan_img, obs_pos, goal_pos, obs_ori):
         self.update_obs_pos(obs_pos)
         self.update_goal_pos(goal_pos)

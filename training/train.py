@@ -4,7 +4,7 @@ import yaml
 import time
 
 import numpy as np
-import wandb
+import swanlab
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -172,12 +172,12 @@ def main(config):
         device=device,
         project_folder=config["project_folder"],
         print_log_freq=config["print_log_freq"],
-        wandb_log_freq=config["wandb_log_freq"],
+        swanlab_log_freq=config["swanlab_log_freq"],
         image_log_freq=config["image_log_freq"],
         num_images_log=config["num_images_log"],
         current_epoch=current_epoch,
         alpha=float(config["alpha"]),
-        use_wandb=config["use_wandb"],
+        use_swanlab=config["swanlab"],
         eval_fraction=config["eval_fraction"],
         eval_freq=config["eval_freq"],
     )
@@ -206,16 +206,16 @@ if __name__ == "__main__":
     os.makedirs(
         config["project_folder"],  # should error if dir already exists to avoid overwriting and old project
     )
-    if config["use_wandb"]:
-        wandb.login()
-        wandb.init(
+    if config["use_swanlab"]:
+        swanlab.login()
+        swanlab.init(
             project=config["project_name"],
-            settings=wandb.Settings(start_method="thread"),          
+            settings=swanlab.Settings(start_method="thread"),          
         )
-        wandb.save(args.config, policy="now")  # save the config file
-        wandb.run.name = config["run_name"]
-        # update the wandb args with the training configurations
-        if wandb.run:
-            wandb.config.update(config)
+        swanlab.save(args.config, policy="now")  # save the config file
+        swanlab.run.name = config["run_name"]
+        # update the swanlab args with the training configurations
+        if swanlab.run:
+            swanlab.config.update(config)
 
     main(config)

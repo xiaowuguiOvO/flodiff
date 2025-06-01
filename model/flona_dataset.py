@@ -291,12 +291,12 @@ class flona_Dataset(Dataset):
         print(floorplan_image.shape)
         # visualization
         
-        # floorplan_np = floorplan_image.cpu().numpy()
-        # floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
-        # floorplan_np = (floorplan_np * 255).astype(np.uint8)
-        # floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
-        # cv2.imshow('floorplan', floorplan_np_bgr)
-        # cv2.waitKey(1)  # 添加等待时间
+        floorplan_np = floorplan_image.cpu().numpy()
+        floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
+        floorplan_np = (floorplan_np * 255).astype(np.uint8)
+        floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
+        cv2.imshow('floorplan', floorplan_np_bgr)
+        cv2.waitKey(1)  # 添加等待时间
         
         # Compute distances
         # distance = (len(curr_traj_data) - self.end_slack - curr_time) // self.waypoint_spacing

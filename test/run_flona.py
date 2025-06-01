@@ -2,7 +2,7 @@ import os
 import time
 from igibson.envs.igibson_env import iGibsonEnv
 import logging
-import FloNaAgent
+from flona_agent import FloNaAgent
 import training.train_utils as train_utils
 import yaml
 import numpy as np
@@ -14,7 +14,7 @@ np.set_printoptions(precision=2, suppress=True)
 
 PREDICT_INTERVAL = 5 # 预测超时时间
 GOAL_POINT_NUM = 16
-MATRIX_WAYPOINT_SPACING = 0.1
+MATRIX_WAYPOINT_SPACING = 0.045
 WAYPOINT_SPACING = 1.0
 def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None, model_config_path=None):
     
@@ -31,7 +31,7 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
     with open(model_config_path, 'r') as f:
         model_config = yaml.safe_load(f)
     
-    agent = FloNaAgent.FloNaAgent(model_path=model_path, model_config=model_config, scene_config=scene_config, metric_waypoint_spacing=MATRIX_WAYPOINT_SPACING, waypoint_spacing=WAYPOINT_SPACING)
+    agent = FloNaAgent(model_path=model_path, model_config=model_config, scene_config=scene_config, metric_waypoint_spacing=MATRIX_WAYPOINT_SPACING, waypoint_spacing=WAYPOINT_SPACING)
 
     for episode in range(num_episodes):
         print(f"--- Episode: {episode + 1} ---")
@@ -147,7 +147,7 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
             dt = now - prev_time
             prev_time = now
             goal_point = trajectory[GOAL_POINT_NUM - 1]
-            look_ahead_point = compute_look_ahead_point(trajectory, robot_pos, ahead_dis=0.3)
+            look_ahead_point = compute_look_ahead_point(trajectory, robot_pos, ahead_dis=0.5)
             # print(look_ahead_point)
             # print(action[0])
             action = pd.compute(robot_pos, robot_ori, look_ahead_point, dt)
