@@ -527,15 +527,16 @@ def visualize_diffusion_action_distribution(
     goal_pos_local,                  # shape: (2,)
     global_ori,                      # float, in radians
     ground_truth_dist,              # float
-    model_output_dist               # list or array of floats, shape: (num_samples,)
+    model_output_dist,               # list or array of floats, shape: (num_samples,)
+    obs_np                           # numpy array of shape (H, W, C)
 ):
     global fig, ax_list
 
     if fig is None or ax_list is None:
         plt.ion()
-        fig, ax_list = plt.subplots(1, 2, figsize=(14, 6))  # 创建两个子图
+        fig, ax_list = plt.subplots(1, 3, figsize=(18, 6))
 
-    ax_abs, ax_local = ax_list
+    ax_abs, ax_local, ax_obs = ax_list
 
     # 清空旧图像
     ax_abs.clear()
@@ -588,6 +589,13 @@ def visualize_diffusion_action_distribution(
     ax_local.grid(True)
     ax_local.legend()
 
+    # obs image
+    ax_obs.clear()
+    img_to_show = obs_np.copy()
+    ax_obs.imshow(img_to_show)
+    ax_obs.set_title("Observation Image")
+    ax_obs.axis("off")
+    
     fig.tight_layout()
     fig.canvas.draw()
     fig.canvas.flush_events()

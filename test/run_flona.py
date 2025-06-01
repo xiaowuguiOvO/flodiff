@@ -131,7 +131,7 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 actions_meter_global = actions_normed_global
                 actions_meter_global = actions_normed_global * MATRIX_WAYPOINT_SPACING * WAYPOINT_SPACING
 
-                trajectory = actions_meter_global[:16]
+                trajectory = actions_meter_global[:]
                 draw_predicted_trajectory(trajectory, base_z=FLOOR_Z+0.02)
                 
                 IS_DECISION_FLAG = False
@@ -145,7 +145,9 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 global_ori = robot_ori
                 ground_truth_dist = 0
                 model_output_dist = 0
-                visualize_diffusion_action_distribution(actions_abs, actions_local, goal_pos_abs, goal_pos_local, global_ori, ground_truth_dist, model_output_dist)
+                last_obs_img_tensor = agent.obs_img_queue[-1]
+                obs_np = last_obs_img_tensor.permute(1, 2, 0).numpy()
+                visualize_diffusion_action_distribution(actions_abs, actions_local, goal_pos_abs, goal_pos_local, global_ori, ground_truth_dist, model_output_dist, obs_np)
 
             # print(robot_pos, goal_point)
             # pd control

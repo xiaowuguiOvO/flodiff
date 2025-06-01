@@ -177,7 +177,9 @@ class FloNaAgent:
         return (resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize)
     
     def resize_and_aspect_crop_img(self, obs_img: np.ndarray, image_resize_size: Tuple[int, int], aspect_ratio: float = 1.0):
+        obs_img = obs_img * 255
         img = Image.fromarray(obs_img.astype(np.uint8))
+
         w, h = img.size
         if w > h:
             crop_height = h
@@ -189,12 +191,14 @@ class FloNaAgent:
             crop_height = int(w / aspect_ratio)
             img = TF.center_crop(img, (crop_height, crop_width))
         img = img.resize(image_resize_size)
+
         resize_img = TF.to_tensor(img)
-        
+        # print(resize_img.min(), resize_img.max(), resize_img.shape)
         return resize_img
     def process_obs_img(self, obs_img):
         obs_img = obs_img.copy()
         obs_img = self.resize_and_aspect_crop_img(obs_img, (96, 96))
+
         self.obs_img_queue.append(obs_img)
         
         if len(self.obs_img_queue) > self.context_size + 1:
