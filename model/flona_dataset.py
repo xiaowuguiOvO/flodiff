@@ -29,6 +29,7 @@ class flona_Dataset(Dataset):
         context_size: int,
         end_slack: int = 0,
         normalize: bool = True,
+        load_index: bool = True
     ):
         self.data_folder = data_folder
         self.scene_names = scene_names
@@ -41,6 +42,7 @@ class flona_Dataset(Dataset):
         self.metric_waypoint_spacing = 0.045 #0.255    # 0.045
         self._image_caches = {}
         self.traj_names = {}    # {scene_name: [traj_name]}
+        self.load_index = load_index
         for scene_name in scene_names:
             self.traj_names[scene_name] = []
             for file in os.listdir(os.path.join(data_folder, scene_name)):
@@ -143,7 +145,18 @@ class flona_Dataset(Dataset):
             self.data_folder,
             f"dataset_n{self.context_size}_slack_{self.end_slack}.npz",
         )
-     
+
+        if not self.load_index: # 如果 load_index_flag 为 False，表示希望强制重建
+            print(f"`load_index_flag` is False. Attempting to delete existing index file to force rebuild: {index_to_data_path}")
+            try:
+                os.remove(index_to_data_path)
+                print(f"Successfully deleted cached index file: {index_to_data_path}")
+            except FileNotFoundError:
+                print(f"Cached index file not found (it would have been rebuilt anyway): {index_to_data_path}")
+            except Exception as e:
+                print(f"Error deleting cached index file {index_to_data_path}: {e}. Proceeding...")
+        
+        
         try:
             # load the index_to_data if it already exists (to save time)
             npz = np.load(index_to_data_path, allow_pickle=True)
@@ -188,7 +201,6 @@ class flona_Dataset(Dataset):
         cur_pos_metric = cur_pos * self.metric_waypoint_spacing * self.waypoint_spacing # trans from waypoints to meters
         goal_pos_metric = goal_pos * self.metric_waypoint_spacing * self.waypoint_spacing
         cur_ori_metric = cur_ori * self.metric_waypoint_spacing * self.waypoint_spacing
-        
         if name == "floorplan":
             image_path = get_data_path(self.data_folder, scene_name, name)
         else:
@@ -288,7 +300,7 @@ class flona_Dataset(Dataset):
         actions, goal_pos, cur_pos, cur_ori, goal_pos_local, cur_pos_local = self._compute_actions(curr_traj_data, curr_time, goal_time)   # waypoints(steps) metric in local        
         # Load goal image
         floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized  = self._load_image_and_transform_points(scene_name_cur, f_curr, cur_pos, goal_pos, cur_ori, "floorplan")
-        print(floorplan_image.shape)
+        # print(floorplan_image.shape)
         # visualization
         
         floorplan_np = floorplan_image.cpu().numpy()

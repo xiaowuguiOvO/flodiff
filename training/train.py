@@ -34,6 +34,7 @@ def main(config):
         context_size=config["context_size"],
         end_slack=data_config["end_slack"],
         normalize=config["normalize"],
+        load_index=config["load_index"]
     )
     test_dataset = flona_Dataset(
         data_folder=os.path.join(data_config["data_folder"], "test"),
