@@ -122,25 +122,31 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 print("over time decision")
 
             if IS_DECISION_FLAG:
-
                 last_predict_time = time.time()
                 # predict
-  
                 output = agent.get_action(agent.obs_img_queue, agent.floorplan_img, agent.obs_pos, agent.goal_pos, agent.obs_ori, MATRIX_WAYPOINT_SPACING, WAYPOINT_SPACING)
                 actions = output["actions"].mean(dim=0)
                 # print(actions.shape)
                 actions_normed_global = to_global_coords(actions.cpu().numpy(), agent.obs_pos, agent.obs_ori)
                 actions_meter_global = actions_normed_global
                 actions_meter_global = actions_normed_global * MATRIX_WAYPOINT_SPACING * WAYPOINT_SPACING
-                # print(actions_normed_global.shape)
-                # print(actions)
-                
+
                 trajectory = actions_meter_global[:16]
                 draw_predicted_trajectory(trajectory, base_z=FLOOR_Z+0.02)
                 
                 IS_DECISION_FLAG = False
                 goal_point_idx = 0
-            
+                
+                # visualization in matplotlib
+                actions_abs = to_global_coords(output["actions"].cpu().numpy(), agent.obs_pos, agent.obs_ori)
+                actions_local = output["actions"].cpu().numpy()
+                goal_pos_abs = agent.goal_pos
+                goal_pos_local = to_local_coords(agent.goal_pos, agent.obs_pos, agent.obs_ori)
+                global_ori = robot_ori
+                ground_truth_dist = 0
+                model_output_dist = 0
+                visualize_diffusion_action_distribution(actions_abs, actions_local, goal_pos_abs, goal_pos_local, global_ori, ground_truth_dist, model_output_dist)
+
             # print(robot_pos, goal_point)
             # pd control
             now = time.time()

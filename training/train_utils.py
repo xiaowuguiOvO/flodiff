@@ -22,7 +22,7 @@ import matplotlib.gridspec as gridspec
 
 from training.Logger import Logger
 from model.data_utils import VISUALIZATION_IMAGE_SIZE
-from model.data_utils import to_global_coords, img_path_to_data_and_point_transfer
+from model.data_utils import to_global_coords, to_local_coords, img_path_to_data_and_point_transfer
 
 ACTION_STATS = {}
 ACTION_STATS["min"] = np.array([-2.5, -4])
@@ -228,9 +228,9 @@ def train_flona(
             # Logging
             loss_cpu = loss.item()
             tepoch.set_postfix(loss=loss_cpu)
-            # swanlab.log({"total_loss": loss_cpu})
-            # swanlab.log({"dist_loss": dist_loss.item()})
-            # swanlab.log({"diffusion_loss": diffusion_loss.item()})
+            swanlab.log({"total_loss": loss_cpu})
+            swanlab.log({"dist_loss": dist_loss.item()})
+            swanlab.log({"diffusion_loss": diffusion_loss.item()})
 
 
             if i % print_log_freq == 0:

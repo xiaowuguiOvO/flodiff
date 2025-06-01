@@ -1,15 +1,10 @@
 import pybullet as p
 import numpy as np
 import math
-import matplotlib as plt
-from ..training.train_utils import to_numpy
-from typing import Optional
-import os
-import swanlab
-import torch
-from diffusion_policy.diffusion_policy.model.diffusion.conditional_unet1d import model_output
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
-import torch.nn as nn
+import matplotlib.pyplot as plt
+import numpy as np
+fig, ax_list = None, None
+
 np.set_printoptions(precision=2, suppress=True)
 RED = np.array([1, 0, 0])
 GREEN = np.array([0, 1, 0])
@@ -307,220 +302,292 @@ class CollisionMonitor:
 
         return False
     
+# def visualize_diffusion_action_distribution(
+#     ema_model: nn.Module,
+#     noise_scheduler: DDPMScheduler,
+#     batch_obs_images: torch.Tensor,
+#     batch_floorplan_images: torch.Tensor,
+#     batch_viz_obs_images: torch.Tensor,
+#     batch_viz_floorplan_images: torch.Tensor,
+#     batch_action_label: torch.Tensor,
+#     batch_distance_labels: torch.Tensor,
+#     batch_goal_pos: torch.Tensor,
+#     batch_curr_pos: torch.Tensor,
+#     batch_curr_ori: torch.Tensor,
+#     batch_goal_pos_local: torch.Tensor,
+#     batch_goal_pos_resized: torch.Tensor,
+#     batch_curr_pos_resized: torch.Tensor,
+#     batch_curr_ori_resized: torch.Tensor,
+#     device: torch.device,
+#     type: str,
+#     project_folder: str,
+#     epoch: int,
+#     num_images_log: int,
+#     num_samples: int = 30,
+#     use_swanlab: bool = True,
+# ):
+#     """Plot samples from the exploration model."""
+
+#     visualize_path = os.path.join(
+#         project_folder,
+#         "visualize",
+#         type,
+#         f"epoch{epoch}",
+#         "action_sampling_prediction",
+#     )
+#     if not os.path.isdir(visualize_path):
+#         os.makedirs(visualize_path)
+
+#     max_batch_size = batch_obs_images.shape[0]
+#     num_images_log = min(num_images_log, batch_obs_images.shape[0], batch_floorplan_images.shape[0], batch_action_label.shape[0], batch_goal_pos.shape[0])
+#     batch_obs_images = batch_obs_images[:num_images_log]
+#     batch_floorplan_images = batch_floorplan_images[:num_images_log]
+#     batch_action_label = batch_action_label[:num_images_log]
+#     batch_goal_pos = batch_goal_pos[:num_images_log]
+#     batch_curr_pos = batch_curr_pos[:num_images_log]
+#     batch_curr_ori = batch_curr_ori[:num_images_log]
+#     batch_goal_pos_local = batch_goal_pos_local[:num_images_log]
+#     batch_goal_pos_resized = batch_goal_pos_resized[:num_images_log]
+#     batch_curr_pos_resized = batch_curr_pos_resized[:num_images_log]
+#     batch_curr_ori_resized = batch_curr_ori_resized[:num_images_log]
+#     swanlab_list = []
+
+#     pred_horizon = batch_action_label.shape[1]
+#     action_dim = batch_action_label.shape[2]
+
+#     # split into batches
+#     batch_obs_images_list = torch.split(batch_obs_images, max_batch_size, dim=0)
+#     batch_floorplan_images_list = torch.split(batch_floorplan_images, max_batch_size, dim=0)
+#     actions_list = []
+#     distances_list = []
+
+#     for obs, floorplan in zip(batch_obs_images_list, batch_floorplan_images_list):
+#         model_output_dict = model_output(
+#             ema_model,
+#             noise_scheduler,
+#             obs,
+#             floorplan,
+#             pred_horizon,
+#             action_dim,
+#             num_samples,
+#             batch_goal_pos,
+#             batch_curr_pos,
+#             batch_curr_ori,
+#             device,
+#         )
+#         actions_list.append(to_numpy(model_output_dict['actions'])) # local, waypoints metric
+#         distances_list.append(to_numpy(model_output_dict['distance']))
+
+#     # concatenate
+#     actions_list = np.concatenate(actions_list, axis=0)
+#     distances_list = np.concatenate(distances_list, axis=0)
+
+#     # split into actions per observation
+#     actions_list = np.split(actions_list, num_images_log, axis=0)
+#     distances_list = np.split(distances_list, num_images_log, axis=0)
+#     distances_avg = [np.mean(dist) for dist in distances_list]
+#     distances_std = [np.std(dist) for dist in distances_list]
+#     assert len(actions_list) == len(actions_list) == num_images_log
+#     np_distance_labels = to_numpy(batch_distance_labels)
+#     for i in range(num_images_log):
+#         fig, ax = plt.subplots(1, 3)
+#         actions = actions_list[i]
+#         action_label = to_numpy(batch_action_label[i])
+#         traj_list = np.concatenate([
+#             actions,
+#             action_label[None],
+#         ], axis=0)
+#         traj_colors = ["red"] * len(actions) + ["magenta"]
+#         traj_alphas = [0.1] * len(actions) + [1.0]
+
+#         # make points numpy array of robot positions (0, 0) and goal positions
+#         point_list = [np.array([0, 0]), to_numpy(batch_goal_pos_local[i])]
+#         point_colors = ["green", "red"]
+#         point_alphas = [1.0, 1.0]
+#         plot_trajs_and_points(
+#             ax[0],
+#             traj_list,
+#             point_list,
+#             traj_colors,
+#             point_colors,
+#             traj_labels=None,
+#             point_labels=None,
+#             traj_alphas=traj_alphas,
+#             point_alphas=point_alphas,
+#             default_coloring=True, 
+#         )
+        
+#         obs_image = to_numpy(batch_viz_obs_images[i])
+#         floorplan_image = to_numpy(batch_viz_floorplan_images[i])
+#         # move channel to last dimension
+#         obs_image = np.moveaxis(obs_image, 0, -1)
+#         floorplan_image = np.moveaxis(floorplan_image, 0, -1)
+#         ax[1].imshow(obs_image)
+#         ax[2].imshow(floorplan_image)
+
+#         # set title
+#         ax[0].set_title(f"diffusion action predictions")
+#         ax[1].set_title(f"observation")
+#         ax[2].set_title(f"goal: label={np_distance_labels[i]} gc_dist={distances_avg[i]:.2f}±{distances_std[i]:.2f}")
+#         str_text = f'goal_resized:{batch_goal_pos_resized[i].cpu().numpy()} curr_pos_resized:{batch_curr_pos_resized[i].cpu().numpy()} curr_ori_resized:{batch_curr_ori_resized[i].cpu().numpy()}'
+#         fig.text(0, 0, str_text)
+        
+#         # make the plot large
+#         fig.set_size_inches(18.5, 10.5)
+#         save_path = os.path.join(visualize_path, f"sample_{i}.png")
+#         plt.savefig(save_path)
+#         # swanlab_list.append(swanlab.Image(save_path))
+#         plt.close(fig)
+#     if len(swanlab_list) > 0 and use_swanlab:
+#         swanlab.log({f"{type}_action_samples": swanlab_list}, commit=False)
+
+# def plot_trajs_and_points(
+#     ax: plt.Axes,
+#     list_trajs: list,
+#     list_points: list,
+#     traj_colors: list = [CYAN, MAGENTA],
+#     point_colors: list = [RED, GREEN],
+#     traj_labels: Optional[list] = ["prediction", "ground truth"],
+#     point_labels: Optional[list] = ["robot", "goal"],
+#     traj_alphas: Optional[list] = None,
+#     point_alphas: Optional[list] = None,
+#     default_coloring: bool = True,
+# ):
+#     """
+#     Plot trajectories and points that could potentially have a yaw.
+
+#     Args:
+#         ax: matplotlib axis
+#         list_trajs: list of trajectories, each trajectory is a numpy array of shape (horizon, 2) 
+#         list_points: list of points, each point is a numpy array of shape (2,)
+#         traj_colors: list of colors for trajectories
+#         point_colors: list of colors for points
+#         traj_labels: list of labels for trajectories
+#         point_labels: list of labels for points
+#         traj_alphas: list of alphas for trajectories
+#         point_alphas: list of alphas for points
+#     """
+#     assert (
+#         len(list_trajs) <= len(traj_colors) or default_coloring
+#     ), "Not enough colors for trajectories"
+#     assert len(list_points) <= len(point_colors), "Not enough colors for points"
+#     assert (
+#         traj_labels is None or len(list_trajs) == len(traj_labels) or default_coloring
+#     ), "Not enough labels for trajectories"
+#     assert point_labels is None or len(list_points) == len(point_labels), "Not enough labels for points"
+
+#     for i, traj in enumerate(list_trajs):
+#         if traj_labels is None:
+#             ax.plot(
+#                 traj[:, 0], 
+#                 traj[:, 1], 
+#                 color=traj_colors[i],
+#                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
+#                 marker="o",
+#             )
+#         else:
+#             ax.plot(
+#                 traj[:, 0],
+#                 traj[:, 1],
+#                 color=traj_colors[i],
+#                 label=traj_labels[i],
+#                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
+#                 marker="o",
+#             )
+#     for i, pt in enumerate(list_points):
+#         if point_labels is None:
+#             ax.plot(
+#                 pt[0], 
+#                 pt[1], 
+#                 color=point_colors[i], 
+#                 alpha=point_alphas[i] if point_alphas is not None else 1.0,
+#                 marker="o",
+#                 markersize=7.0
+#             )
+#         else:
+#             ax.plot(
+#                 pt[0],
+#                 pt[1],
+#                 color=point_colors[i],
+#                 alpha=point_alphas[i] if point_alphas is not None else 1.0,
+#                 marker="o",
+#                 markersize=7.0,
+#                 label=point_labels[i],
+#             )
+#     # put the legend below the plot
+#     if traj_labels is not None or point_labels is not None:
+#         ax.legend()
+#         ax.legend(bbox_to_anchor=(0.0, -0.5), loc="upper left", ncol=2)
+#     ax.set_aspect("equal", "box")
+    
 def visualize_diffusion_action_distribution(
-    ema_model: nn.Module,
-    noise_scheduler: DDPMScheduler,
-    batch_obs_images: torch.Tensor,
-    batch_floorplan_images: torch.Tensor,
-    batch_viz_obs_images: torch.Tensor,
-    batch_viz_floorplan_images: torch.Tensor,
-    batch_action_label: torch.Tensor,
-    batch_distance_labels: torch.Tensor,
-    batch_goal_pos: torch.Tensor,
-    batch_curr_pos: torch.Tensor,
-    batch_curr_ori: torch.Tensor,
-    batch_goal_pos_local: torch.Tensor,
-    batch_goal_pos_resized: torch.Tensor,
-    batch_curr_pos_resized: torch.Tensor,
-    batch_curr_ori_resized: torch.Tensor,
-    device: torch.device,
-    type: str,
-    project_folder: str,
-    epoch: int,
-    num_images_log: int,
-    num_samples: int = 30,
-    use_swanlab: bool = True,
+    model_output_action_list_abs,    # shape: (num_samples, pred_horizon, action_dim)
+    model_output_action_list_local,  # shape: same as above, but in local frame
+    goal_pos_abs,                    # shape: (2,)
+    goal_pos_local,                  # shape: (2,)
+    global_ori,                      # float, in radians
+    ground_truth_dist,              # float
+    model_output_dist               # list or array of floats, shape: (num_samples,)
 ):
-    """Plot samples from the exploration model."""
+    global fig, ax_list
 
-    visualize_path = os.path.join(
-        project_folder,
-        "visualize",
-        type,
-        f"epoch{epoch}",
-        "action_sampling_prediction",
-    )
-    if not os.path.isdir(visualize_path):
-        os.makedirs(visualize_path)
+    if fig is None or ax_list is None:
+        plt.ion()
+        fig, ax_list = plt.subplots(1, 2, figsize=(14, 6))  # 创建两个子图
 
-    max_batch_size = batch_obs_images.shape[0]
-    num_images_log = min(num_images_log, batch_obs_images.shape[0], batch_floorplan_images.shape[0], batch_action_label.shape[0], batch_goal_pos.shape[0])
-    batch_obs_images = batch_obs_images[:num_images_log]
-    batch_floorplan_images = batch_floorplan_images[:num_images_log]
-    batch_action_label = batch_action_label[:num_images_log]
-    batch_goal_pos = batch_goal_pos[:num_images_log]
-    batch_curr_pos = batch_curr_pos[:num_images_log]
-    batch_curr_ori = batch_curr_ori[:num_images_log]
-    batch_goal_pos_local = batch_goal_pos_local[:num_images_log]
-    batch_goal_pos_resized = batch_goal_pos_resized[:num_images_log]
-    batch_curr_pos_resized = batch_curr_pos_resized[:num_images_log]
-    batch_curr_ori_resized = batch_curr_ori_resized[:num_images_log]
-    swanlab_list = []
+    ax_abs, ax_local = ax_list
 
-    pred_horizon = batch_action_label.shape[1]
-    action_dim = batch_action_label.shape[2]
+    # 清空旧图像
+    ax_abs.clear()
+    ax_local.clear()
 
-    # split into batches
-    batch_obs_images_list = torch.split(batch_obs_images, max_batch_size, dim=0)
-    batch_floorplan_images_list = torch.split(batch_floorplan_images, max_batch_size, dim=0)
-    actions_list = []
-    distances_list = []
+    num_samples = len(model_output_action_list_abs)
 
-    for obs, floorplan in zip(batch_obs_images_list, batch_floorplan_images_list):
-        model_output_dict = model_output(
-            ema_model,
-            noise_scheduler,
-            obs,
-            floorplan,
-            pred_horizon,
-            action_dim,
-            num_samples,
-            batch_goal_pos,
-            batch_curr_pos,
-            batch_curr_ori,
-            device,
-        )
-        actions_list.append(to_numpy(model_output_dict['actions'])) # local, waypoints metric
-        distances_list.append(to_numpy(model_output_dict['distance']))
+    # === 绝对轨迹图 ===
+    for i in range(num_samples):
+        traj_abs = model_output_action_list_abs[i]
+        ax_abs.plot(traj_abs[:, 0], traj_abs[:, 1], color='red', alpha=0.1)
 
-    # concatenate
-    actions_list = np.concatenate(actions_list, axis=0)
-    distances_list = np.concatenate(distances_list, axis=0)
+    avg_traj_abs = np.mean(model_output_action_list_abs, axis=0)
+    ax_abs.plot(avg_traj_abs[:, 0], avg_traj_abs[:, 1], color='blue', linewidth=2, label='Avg Traj')
+    ax_abs.scatter(goal_pos_abs[0], goal_pos_abs[1], color='green', s=100, label='Goal (abs)')
 
-    # split into actions per observation
-    actions_list = np.split(actions_list, num_images_log, axis=0)
-    distances_list = np.split(distances_list, num_images_log, axis=0)
-    distances_avg = [np.mean(dist) for dist in distances_list]
-    distances_std = [np.std(dist) for dist in distances_list]
-    assert len(actions_list) == len(actions_list) == num_images_log
-    np_distance_labels = to_numpy(batch_distance_labels)
-    for i in range(num_images_log):
-        fig, ax = plt.subplots(1, 3)
-        actions = actions_list[i]
-        action_label = to_numpy(batch_action_label[i])
-        traj_list = np.concatenate([
-            actions,
-            action_label[None],
-        ], axis=0)
-        traj_colors = ["red"] * len(actions) + ["magenta"]
-        traj_alphas = [0.1] * len(actions) + [1.0]
+    # 起点位置
+    start_x = model_output_action_list_abs[0][0, 0]
+    start_y = model_output_action_list_abs[0][0, 1]
+    ax_abs.scatter(start_x, start_y, color='black', s=80, label='Start (abs)')
 
-        # make points numpy array of robot positions (0, 0) and goal positions
-        point_list = [np.array([0, 0]), to_numpy(batch_goal_pos_local[i])]
-        point_colors = ["green", "red"]
-        point_alphas = [1.0, 1.0]
-        plot_trajs_and_points(
-            ax[0],
-            traj_list,
-            point_list,
-            traj_colors,
-            point_colors,
-            traj_labels=None,
-            point_labels=None,
-            traj_alphas=traj_alphas,
-            point_alphas=point_alphas,
-            default_coloring=True, 
-        )
-        
-        obs_image = to_numpy(batch_viz_obs_images[i])
-        floorplan_image = to_numpy(batch_viz_floorplan_images[i])
-        # move channel to last dimension
-        obs_image = np.moveaxis(obs_image, 0, -1)
-        floorplan_image = np.moveaxis(floorplan_image, 0, -1)
-        ax[1].imshow(obs_image)
-        ax[2].imshow(floorplan_image)
+    # 添加机器人朝向箭头
+    arrow_len = 4  # 箭头长度
+    dx = arrow_len * np.cos(global_ori)
+    dy = arrow_len * np.sin(global_ori)
+    ax_abs.quiver(start_x, start_y, dx, dy, angles='xy', scale_units='xy', scale=1, color='orange', width=0.01, label='Orientation')
 
-        # set title
-        ax[0].set_title(f"diffusion action predictions")
-        ax[1].set_title(f"observation")
-        ax[2].set_title(f"goal: label={np_distance_labels[i]} gc_dist={distances_avg[i]:.2f}±{distances_std[i]:.2f}")
-        str_text = f'goal_resized:{batch_goal_pos_resized[i].cpu().numpy()} curr_pos_resized:{batch_curr_pos_resized[i].cpu().numpy()} curr_ori_resized:{batch_curr_ori_resized[i].cpu().numpy()}'
-        fig.text(0, 0, str_text)
-        
-        # make the plot large
-        fig.set_size_inches(18.5, 10.5)
-        save_path = os.path.join(visualize_path, f"sample_{i}.png")
-        plt.savefig(save_path)
-        # swanlab_list.append(swanlab.Image(save_path))
-        plt.close(fig)
-    if len(swanlab_list) > 0 and use_swanlab:
-        swanlab.log({f"{type}_action_samples": swanlab_list}, commit=False)
+    ax_abs.set_title('Absolute Trajectories')
+    ax_abs.set_xlabel('X')
+    ax_abs.set_ylabel('Y')
+    ax_abs.axis('equal')
+    ax_abs.grid(True)
+    ax_abs.legend()
 
-def plot_trajs_and_points(
-    ax: plt.Axes,
-    list_trajs: list,
-    list_points: list,
-    traj_colors: list = [CYAN, MAGENTA],
-    point_colors: list = [RED, GREEN],
-    traj_labels: Optional[list] = ["prediction", "ground truth"],
-    point_labels: Optional[list] = ["robot", "goal"],
-    traj_alphas: Optional[list] = None,
-    point_alphas: Optional[list] = None,
-    default_coloring: bool = True,
-):
-    """
-    Plot trajectories and points that could potentially have a yaw.
+    # === 相对轨迹图 ===
+    for i in range(num_samples):
+        traj_local = model_output_action_list_local[i]
+        ax_local.plot(traj_local[:, 0], traj_local[:, 1], color='red', alpha=0.1)
 
-    Args:
-        ax: matplotlib axis
-        list_trajs: list of trajectories, each trajectory is a numpy array of shape (horizon, 2) 
-        list_points: list of points, each point is a numpy array of shape (2,)
-        traj_colors: list of colors for trajectories
-        point_colors: list of colors for points
-        traj_labels: list of labels for trajectories
-        point_labels: list of labels for points
-        traj_alphas: list of alphas for trajectories
-        point_alphas: list of alphas for points
-    """
-    assert (
-        len(list_trajs) <= len(traj_colors) or default_coloring
-    ), "Not enough colors for trajectories"
-    assert len(list_points) <= len(point_colors), "Not enough colors for points"
-    assert (
-        traj_labels is None or len(list_trajs) == len(traj_labels) or default_coloring
-    ), "Not enough labels for trajectories"
-    assert point_labels is None or len(list_points) == len(point_labels), "Not enough labels for points"
+    avg_traj_local = np.mean(model_output_action_list_local, axis=0)
+    ax_local.plot(avg_traj_local[:, 0], avg_traj_local[:, 1], color='blue', linewidth=2, label='Avg Traj')
+    ax_local.scatter(goal_pos_local[0], goal_pos_local[1], color='green', s=100, label='Goal (local)')
+    ax_local.scatter(0, 0, color='black', s=80, label='Start (0,0)')
 
-    for i, traj in enumerate(list_trajs):
-        if traj_labels is None:
-            ax.plot(
-                traj[:, 0], 
-                traj[:, 1], 
-                color=traj_colors[i],
-                alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
-                marker="o",
-            )
-        else:
-            ax.plot(
-                traj[:, 0],
-                traj[:, 1],
-                color=traj_colors[i],
-                label=traj_labels[i],
-                alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
-                marker="o",
-            )
-    for i, pt in enumerate(list_points):
-        if point_labels is None:
-            ax.plot(
-                pt[0], 
-                pt[1], 
-                color=point_colors[i], 
-                alpha=point_alphas[i] if point_alphas is not None else 1.0,
-                marker="o",
-                markersize=7.0
-            )
-        else:
-            ax.plot(
-                pt[0],
-                pt[1],
-                color=point_colors[i],
-                alpha=point_alphas[i] if point_alphas is not None else 1.0,
-                marker="o",
-                markersize=7.0,
-                label=point_labels[i],
-            )
-    # put the legend below the plot
-    if traj_labels is not None or point_labels is not None:
-        ax.legend()
-        ax.legend(bbox_to_anchor=(0.0, -0.5), loc="upper left", ncol=2)
-    ax.set_aspect("equal", "box")
+    ax_local.set_title(f'Relative Trajectories\nGT Dist: {ground_truth_dist:.2f}, '
+                       f'Pred: {np.mean(model_output_dist):.2f} ± {np.std(model_output_dist):.2f}')
+    ax_local.set_xlabel('X')
+    ax_local.set_ylabel('Y')
+    ax_local.axis('equal')
+    ax_local.grid(True)
+    ax_local.legend()
+
+    fig.tight_layout()
+    fig.canvas.draw()
+    fig.canvas.flush_events()
