@@ -92,9 +92,8 @@ class flona_ViNT(nn.Module):
         device = obs_img.device
         obs_goal_pos = torch.cat([obs_pos, goal_pos], dim=1)
         obs_goal_pos_ori = torch.cat([obs_goal_pos, obs_ori], dim=1).to(device) 
-        
         # Get the current obs and floorplan encoding
-        obsfloorplan_img = torch.cat([obs_img[:, 3*self.context_size:, :, :], floorplan_img], dim=1) # concatenate the last one in context (equal to current image) and floorplan image
+        obsfloorplan_img = torch.cat([obs_img[:, 3*self.context_size:, :, :], floorplan_img], dim=1) # concatenate the last one in context (i.e. current image) and floorplan image
         obsfloorplan_encoding = self.floorplan_encoder.extract_features(obsfloorplan_img) # get encoding of this img 
         obsfloorplan_encoding = self.floorplan_encoder._avg_pooling(obsfloorplan_encoding) # avg pooling 
         

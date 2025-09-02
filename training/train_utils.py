@@ -471,7 +471,7 @@ def evaluate_flona(
                 )
     
 def execute_model(
-    ema_model: EMAModel,
+    model: nn.Module,
     cur_pos: np.ndarray,        # np.array (1,2)   
     cur_heading: np.ndarray,    # np.array (1,2)
     # cur_pos_f3: np.ndarray, # np.array (1,3)      
@@ -504,8 +504,7 @@ def execute_model(
         noise_scheduler: noise scheduler to evaluate with 
         log_folder: folder to save images to
     """
-    ema_model = ema_model.averaged_model
-    ema_model.eval()
+    model.eval()
     
     cur_pos = torch.as_tensor(cur_pos, dtype=torch.float32)
     cur_heading = torch.as_tensor(cur_heading, dtype=torch.float32)
@@ -520,16 +519,10 @@ def execute_model(
     batch_cur_obss = torch.cat(batch_cur_obss, dim=1).to(device)  # (1,3*L,h,w)
     batch_floorplan = transform(floorplan).to(device)  # (1,3,h,w)
     
-    # cur_pos_f3 = torch.as_tensor(cur_pos_f3, dtype=torch.float32)
-    # cur_heading_f3 = torch.as_tensor(cur_heading_f3, dtype=torch.float32)
-    
-    # _, cur_pos_resized, goal_pos_resized, cur_ori_resized = img_path_to_data_and_point_transfer('/home/user/data/vis_nav/iGibson/igibson/dataset/Quantico_220/train/Quantico/traj_127/00072.png', (96, 96), cur_pos[0], goal_pos[0], cur_heading[0])
-    # cur_pos_i = torch.tensor(np.array([cur_pos_resized]))
-    # goal_pos_i = torch.tensor(np.array([goal_pos_resized]))
-    # cur_heading_i = torch.tensor(np.array([cur_ori_resized]))
+
     
     model_output_dict = model_output(
-        ema_model,
+        model,
         noise_scheduler,
         batch_cur_obss,
         batch_floorplan,
@@ -543,20 +536,14 @@ def execute_model(
     )
     actions = model_output_dict['actions'].mean(dim=0)  # [1,8,2]
     
-    # actions = actions.squeeze(0)
+
     distance = model_output_dict['distance']
-    # pos_ori = model_output_dict['pos_ori']
-    # print('pos_ori shape ', pos_ori.shape)
-    # print(pos_ori.mean(dim=0))
-    # print('gt ', cur_pos, cur_heading )
+
     actions_normed_global = to_global_coords(to_numpy(actions), to_numpy(cur_pos).squeeze(0), to_numpy(cur_heading).squeeze(0))
     actions_meter_global = actions_normed_global * metric_waipoint_spacing * waypoint_spacing
     
     
-    # if f3
-    # actions_meter_global_transformed = actions_meter_global.copy()
-    # for i in range(actions_meter_global.shape[0]):
-    #     actions_meter_global_transformed[i] = actions_meter_global[i] - actions_meter_global[0] + cur_pos.squeeze(0)
+
     
     if log_add is not None:
         save_action = actions.cpu().detach().numpy()
@@ -588,7 +575,7 @@ def execute_model(
             
         ax3.imshow(floorplan_ary[max(0, start_xy[0]-200) : min(start_xy[0]+200, floorplan_ary.shape[0]), max(0, start_xy[1]-200) : min(start_xy[1]+200, floorplan_ary.shape[1]), :])
         ax4.imshow(floorplan_ary)
-        # plt.plot(actions_meter_global[:,0], actions_meter_global[:,1], marker = 'o')
+
         plt.savefig(os.path.join(log_add))
     
     return actions_meter_global    

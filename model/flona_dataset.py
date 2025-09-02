@@ -267,7 +267,7 @@ class flona_Dataset(Dataset):
             return self.trajectory_cache[k]
         else:
             with open(os.path.join(self.data_folder, scene_name, trajectory_name, trajectory_name + ".npy"), "rb") as f:
-                traj_data = np.load(f)
+                traj_data = np.load(f, allow_pickle=True)
             self.trajectory_cache[k] = traj_data
             return traj_data
 

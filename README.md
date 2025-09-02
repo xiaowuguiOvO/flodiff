@@ -33,7 +33,7 @@ pip install -e .
 b. Install the `diffusion_policy`:
 
 ```bash
-cd /path_to_flodiff
+cd /path/to/flodiff
 git clone https://github.com/real-stanford/diffusion_policy.git
 pip install -e diffusion_policy/
 ```
@@ -69,15 +69,15 @@ You can download it from [BaiduDisk](https://pan.baidu.com/s/1eqHdBWQWKFUF-kJ5xH
 
 b. Unpack this tar archive:
 ```bash
-cat /path_to_dataset/dataset.tar_* > /path_to_dataset/dataset.tar
-tar -xvf dataset.tar -C /path_to_flodiff/datasets
-mkdir /path_to_flodiff/datasets/trav_maps
-tar -xzvf /path_to_dataset/trav_maps.tar.gz -C /path_to_flodiff/datasets/trav_maps
+cat /path/to/dataset/dataset.tar_* > /path/to/dataset/dataset.tar
+tar -xvf dataset.tar -C /path/to/flodiff/datasets
+mkdir /path/to/flodiff/datasets/trav_maps
+tar -xzvf /path/to/dataset/trav_maps.tar.gz -C /path/to/flodiff/datasets/trav_maps
 ```
 ## 3. Training
 To train your own model, simply run the following command:
 ```bash
-cd /path_to_flodiff/training
+cd /path/to/flodiff/training
 python train.py
 ```
 The model is saved to `/training/log/flona` by default. If you need to change the save location, modify the `flona.yaml` configuration file. 
@@ -85,7 +85,7 @@ Note: This code is designed for training on a single GPU. If you wish to use mul
 ## 4. Testing in simulator
 a. Install iGibson:
 ```bash
-cd /path_to_flodiff
+cd /path/to/flodiff
 git clone https://github.com/StanfordVL/iGibson --recursive
 cd iGibson
 pip install -e . # This step takes about 4 minutes
@@ -95,5 +95,37 @@ b. Download scenes:
 Please refer to this [link](https://stanfordvl.github.io/iGibson/dataset.html) to download the Gibson static scenes. We recommend saving the downloaded scenes in the following directory: /path_to_flodiff/iGibson/igibson/data/g_dataset.
 
 c. Testing:
+```bash
+mkdir /path/to/flodiff/iGibson/scripts
+mv /path/to/flodiff/test_flona_gtpos.py  /path/to/flodiff/iGibson/scripts/
+cd /path/to/flodiff/iGibson
+python -m igibson.scripts.test_flona_gtpos
+```
+For evaluating results, run:
+```bash
+python /path/to/flodiff/results/evaluate.py
+```
 
-Comming soon...
+## 🔗 Citation
+
+If you find our work helpful, please cite:
+
+```bibtex
+@inproceedings{li2025flona,
+    title={FloNa: Floor Plan Guided Embodied Visual Navigation},
+    author={Li, Jiaxin and Huang, Weiqi and Wang, Zan and Liang, Wei and Di, Huijun and Liu, Feng},
+    booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+    year={2025}
+}
+
+```
+
+## License
+
+This project is licensed under the [MIT licensed](LICENSE). 
+
+##  Acknowledgements
+
+- [iGibson](https://github.com/StanfordVL/iGibson): We adopt iGibson and the Gibson v2 dataset as our simulation environment and scene, leveraging their comprehensive capabilities for realistic and diverse scenario modeling.
+
+- [NoMad](https://general-navigation-models.github.io/nomad/): Partial code is borrowed from NoMad.
