@@ -481,13 +481,13 @@ def execute_model(
     # floorplan_path: str,        # floorplan path
     cur_obs: torch.Tensor,        # torch.tensor(L,3,h,w)
     floorplan: torch.Tensor,      # torch.tensor (1,3,h,w)
-    metric_waipoint_spacing: float,
+    metric_waypoint_spacing: float,
     waypoint_spacing: float,
     transform: transforms,
     device: torch.device,
     noise_scheduler: DDPMScheduler,
-    floorplan_ary: np.ndarray,
-    log_add: str = None,
+    # floorplan_ary: np.ndarray,
+    # log_add: str = None,
 ):
     """
     Execute the model on the given data.
@@ -511,9 +511,9 @@ def execute_model(
     goal_pos = torch.as_tensor(goal_pos, dtype=torch.float32)
     cur_obs = torch.as_tensor(cur_obs, dtype=torch.float32)
     floorplan = torch.as_tensor(floorplan, dtype=torch.float32)
-    cur_pos /= metric_waipoint_spacing * waypoint_spacing
-    cur_heading /= metric_waipoint_spacing * waypoint_spacing
-    goal_pos /= metric_waipoint_spacing * waypoint_spacing
+    cur_pos /= metric_waypoint_spacing * waypoint_spacing
+    cur_heading /= metric_waypoint_spacing * waypoint_spacing
+    goal_pos /= metric_waypoint_spacing * waypoint_spacing
     cur_obss = torch.split(cur_obs, 1, dim=0)
     batch_cur_obss = [transform(obs) for obs in cur_obss]
     batch_cur_obss = torch.cat(batch_cur_obss, dim=1).to(device)  # (1,3*L,h,w)
@@ -540,43 +540,40 @@ def execute_model(
     distance = model_output_dict['distance']
 
     actions_normed_global = to_global_coords(to_numpy(actions), to_numpy(cur_pos).squeeze(0), to_numpy(cur_heading).squeeze(0))
-    actions_meter_global = actions_normed_global * metric_waipoint_spacing * waypoint_spacing
+    actions_meter_global = actions_normed_global * metric_waypoint_spacing * waypoint_spacing
     
-    
-
-    
-    if log_add is not None:
-        save_action = actions.cpu().detach().numpy()
-        gs = gridspec.GridSpec(6, 6)
-        gs.update(wspace = 0.9, hspace = 0.7)
-        ax1 = plt.subplot(gs[:2, :2])
-        ax2 = plt.subplot(gs[:2, 2:])
-        ax3 = plt.subplot(gs[2:, :3])
-        ax4 = plt.subplot(gs[2:, 3:])
+    # if log_add is not None:
+    #     save_action = actions.cpu().detach().numpy()
+    #     gs = gridspec.GridSpec(6, 6)
+    #     gs.update(wspace = 0.9, hspace = 0.7)
+    #     ax1 = plt.subplot(gs[:2, :2])
+    #     ax2 = plt.subplot(gs[:2, 2:])
+    #     ax3 = plt.subplot(gs[2:, :3])
+    #     ax4 = plt.subplot(gs[2:, 3:])
         
-        goal_pos_metric = goal_pos * metric_waipoint_spacing * waypoint_spacing
-        floor_width = floorplan_ary.shape[0]
-        end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
-        start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
-        floorplan_ary[max(0, end_xy[0]-5) : min(end_xy[0]+5, floorplan_ary.shape[0]), max(0, end_xy[1]-5) : min(end_xy[1]+5, floorplan_ary.shape[1]), :] = np.array([0, 0, 255, 255])
+    #     goal_pos_metric = goal_pos * metric_waipoint_spacing * waypoint_spacing
+    #     floor_width = floorplan_ary.shape[0]
+    #     end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
+    #     start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
+    #     floorplan_ary[max(0, end_xy[0]-5) : min(end_xy[0]+5, floorplan_ary.shape[0]), max(0, end_xy[1]-5) : min(end_xy[1]+5, floorplan_ary.shape[1]), :] = np.array([0, 0, 255, 255])
         
-        ax1.imshow(cur_obs[-1].permute(1,2,0).cpu().detach().numpy())
-        ax2.plot(save_action[:,0], save_action[:,1], marker = '.')
-        for i, xy in enumerate(actions_meter_global):
-            map_xy = np.flip((np.array(xy) / 0.01 + floor_width / 2.0)).astype(int)
-            if i == 0:
-                start_xy = map_xy
-            if i < 8:
-                color = np.array([255, 0, 0, 255])
-                floorplan_ary[map_xy[0]-2 : map_xy[0]+2, map_xy[1]-2 : map_xy[1]+2, :] = color
-            else:
-                color = np.array([0, 255, 0, 30])
-                floorplan_ary[map_xy[0]-1 : map_xy[0]+1, map_xy[1]-1 : map_xy[1]+1, :] = color
+    #     ax1.imshow(cur_obs[-1].permute(1,2,0).cpu().detach().numpy())
+    #     ax2.plot(save_action[:,0], save_action[:,1], marker = '.')
+    #     for i, xy in enumerate(actions_meter_global):
+    #         map_xy = np.flip((np.array(xy) / 0.01 + floor_width / 2.0)).astype(int)
+    #         if i == 0:
+    #             start_xy = map_xy
+    #         if i < 8:
+    #             color = np.array([255, 0, 0, 255])
+    #             floorplan_ary[map_xy[0]-2 : map_xy[0]+2, map_xy[1]-2 : map_xy[1]+2, :] = color
+    #         else:
+    #             color = np.array([0, 255, 0, 30])
+    #             floorplan_ary[map_xy[0]-1 : map_xy[0]+1, map_xy[1]-1 : map_xy[1]+1, :] = color
             
-        ax3.imshow(floorplan_ary[max(0, start_xy[0]-200) : min(start_xy[0]+200, floorplan_ary.shape[0]), max(0, start_xy[1]-200) : min(start_xy[1]+200, floorplan_ary.shape[1]), :])
-        ax4.imshow(floorplan_ary)
+    #     ax3.imshow(floorplan_ary[max(0, start_xy[0]-200) : min(start_xy[0]+200, floorplan_ary.shape[0]), max(0, start_xy[1]-200) : min(start_xy[1]+200, floorplan_ary.shape[1]), :])
+    #     ax4.imshow(floorplan_ary)
 
-        plt.savefig(os.path.join(log_add))
+    #     plt.savefig(os.path.join(log_add))
     
     return actions_meter_global    
     

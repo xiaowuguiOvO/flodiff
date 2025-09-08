@@ -19,3 +19,5 @@ down_dims: [64, 128, 256]
 cond_predict_scale: False
 num_diffusion_iters: 10
 floorplan_encoder: efficientnet-b0
+normalize: True
+image_size: [96, 96] # width, height  

@@ -209,6 +209,7 @@ class flona_Dataset(Dataset):
         try:
             with open(image_path, "rb") as f:
                 result = img_path_to_data_and_point_transfer(f, self.floor_shapes_ori[scene_name], self.image_size, cur_pos_metric, goal_pos_metric, cur_ori_metric)
+
             return result
         except TypeError:
             print(f"Failed to load image {image_path}")
@@ -216,9 +217,9 @@ class flona_Dataset(Dataset):
     def _compute_actions(self, traj_data, curr_time, goal_time):
         start_index = curr_time
         end_index = curr_time + self.len_traj_pred * self.waypoint_spacing + 1
-        yaw = traj_data[start_index:end_index:self.waypoint_spacing, 2:].copy()
-        positions = traj_data[start_index:end_index:self.waypoint_spacing, :2].copy()
-        goal_pos = traj_data[goal_time, :2].copy()
+        yaw = traj_data[start_index:end_index:self.waypoint_spacing, 2:].copy() # 后两个数据是yaw
+        positions = traj_data[start_index:end_index:self.waypoint_spacing, :2].copy() # 前两个数据是x,y
+        goal_pos = traj_data[goal_time, :2].copy() 
         cur_pos = positions[0]
         cur_ori = yaw[0]
         cur_ori = cur_pos + (cur_ori - cur_pos) / np.linalg.norm(cur_ori - cur_pos)
@@ -303,12 +304,12 @@ class flona_Dataset(Dataset):
         # print(floorplan_image.shape)
         # visualization
         
-        floorplan_np = floorplan_image.cpu().numpy()
-        floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
-        floorplan_np = (floorplan_np * 255).astype(np.uint8)
-        floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
-        cv2.imshow('floorplan', floorplan_np_bgr)
-        cv2.waitKey(1)  # 添加等待时间
+        # floorplan_np = floorplan_image.cpu().numpy()
+        # floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
+        # floorplan_np = (floorplan_np * 255).astype(np.uint8)
+        # floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
+        # cv2.imshow('floorplan', floorplan_np_bgr)
+        # cv2.waitKey(1)  # 添加等待时间
         
         # Compute distances
         # distance = (len(curr_traj_data) - self.end_slack - curr_time) // self.waypoint_spacing
