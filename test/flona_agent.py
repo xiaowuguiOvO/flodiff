@@ -142,7 +142,8 @@ class FloNaAgent:
         self.process_obs_img(obs_img)
     
     def update_floorplan_img(self, floorplan_img):
-        self.process_floorplan_img(floorplan_img)
+        self.floorplan_img = floorplan_img
+        # self.process_floorplan_img(floorplan_img)
         
     def update_obs_pos(self, obs_pos):
         self.obs_pos = obs_pos
@@ -153,28 +154,28 @@ class FloNaAgent:
     def update_obs_ori(self, obs_ori):
         self.obs_ori = obs_ori
     
-    def process_obs_floorplan_to_input(self, img, cur_pos, goal_pos, cur_ori, metric_waypoint_spacing, waypoint_spacing, image_resize_size):
-        cur_pos_metric = cur_pos * metric_waypoint_spacing * waypoint_spacing # trans from waypoints to meters
-        goal_pos_metric = goal_pos * metric_waypoint_spacing * waypoint_spacing
-        cur_ori_metric = cur_ori * metric_waypoint_spacing * waypoint_spacing
+    # def process_obs_floorplan_to_input(self, img, cur_pos, goal_pos, cur_ori, metric_waypoint_spacing, waypoint_spacing, image_resize_size):
+    #     cur_pos_metric = cur_pos * metric_waypoint_spacing * waypoint_spacing # trans from waypoints to meters
+    #     goal_pos_metric = goal_pos * metric_waypoint_spacing * waypoint_spacing
+    #     cur_ori_metric = cur_ori * metric_waypoint_spacing * waypoint_spacing
         
-        scene_name = self.scene_config['scene_id'] + '_' + str(self.scene_config['floor_num'])
-        ori_size = self.floor_shapes_ori[scene_name]
-        w0 = ori_size
-        h0 = ori_size
-        # w, h = img.size
-        cur_pos = cur_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
-        goal_pos = goal_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
-        cur_ori = cur_ori_metric * 100 + np.array([w0 / 2, h0 / 2])
+    #     scene_name = self.scene_config['scene_id'] + '_' + str(self.scene_config['floor_num'])
+    #     ori_size = self.floor_shapes_ori[scene_name]
+    #     w0 = ori_size
+    #     h0 = ori_size
+    #     # w, h = img.size
+    #     cur_pos = cur_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
+    #     goal_pos = goal_pos_metric * 100 + np.array([w0 / 2, h0 / 2])
+    #     cur_ori = cur_ori_metric * 100 + np.array([w0 / 2, h0 / 2])
         
-        img = cv2.resize(img, image_resize_size)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        cur_pos_in_resizeSize = cur_pos * image_resize_size[0] / w0
-        goal_pos_in_resizeSize = goal_pos * image_resize_size[0] / w0
-        cur_ori_in_resizeSize = cur_ori * image_resize_size[0] / w0       
-        resize_img = TF.to_tensor(img)
+    #     img = cv2.resize(img, image_resize_size)
+    #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    #     cur_pos_in_resizeSize = cur_pos * image_resize_size[0] / w0
+    #     goal_pos_in_resizeSize = goal_pos * image_resize_size[0] / w0
+    #     cur_ori_in_resizeSize = cur_ori * image_resize_size[0] / w0       
+    #     resize_img = TF.to_tensor(img)
         
-        return (resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize)
+    #     return (resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize)
     
     def resize_and_aspect_crop_img(self, obs_img: np.ndarray, image_resize_size: Tuple[int, int], aspect_ratio: float = 1.0):
         obs_img = obs_img * 255
@@ -210,13 +211,15 @@ class FloNaAgent:
 
         
     def process_floorplan_img(self, floorplan_img):
-        floorplan_img = floorplan_img.copy()
-        floorplan_img = self.process_obs_floorplan_to_input(floorplan_img, self.obs_pos, self.goal_pos, self.obs_ori, self.metric_waypoint_spacing, self.waypoint_spacing, (96, 96))[0]
+        # floorplan_img = floorplan_img.copy()
+        floorplan_img = np.array(floorplan_img)
+        floorplan_tensor = TF.to_tensor(floorplan_img) 
+        # floorplan_img = self.process_obs_floorplan_to_input(floorplan_img, self.obs_pos, self.goal_pos, self.obs_ori, self.metric_waypoint_spacing, self.waypoint_spacing, (96, 96))[0]
         self.floorplan_img = floorplan_img
-        floorplan_np = floorplan_img.cpu().numpy()
-        floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
-        floorplan_np = (floorplan_np * 255).astype(np.uint8)
-        floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
+        # floorplan_np = floorplan_tensor.cpu().numpy()
+        # floorplan_np = np.transpose(floorplan_np, (1, 2, 0))
+        # floorplan_np = (floorplan_np * 255).astype(np.uint8)
+        # floorplan_np_bgr = cv2.cvtColor(floorplan_np, cv2.COLOR_RGB2BGR)
         # print(floorplan_np_bgr.shape)
         # cv2.imshow('floorplan', floorplan_np_bgr)
         # cv2.waitKey(1)  # 添加等待时间

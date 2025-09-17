@@ -3,6 +3,14 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Circle, FancyArrowPatch
+import torch
+from typing import Tuple
+import numpy as np
+import torch
+from PIL import Image
+import torchvision.transforms.functional as TF
+
 fig, ax_list = None, None
 
 np.set_printoptions(precision=2, suppress=True)
@@ -599,3 +607,229 @@ def visualize_diffusion_action_distribution(
     fig.tight_layout()
     fig.canvas.draw()
     fig.canvas.flush_events()
+
+def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_resized, 
+                                         goal_pos_resized, cur_ori_resized, floorplan_image, 
+                                         obs_image, predicted_action, trajectory_name, time_step, 
+                                         to_global_coords_func, save_path=None, show_obs=True, cur_shortest_path=None, floor_shapes_ori=None, scene_name=None, image_size=None):
+    """
+    可视化机器人推理过程（使用你的坐标转换函数）
+    
+    Args:
+        cur_pos: 当前位置 (全局坐标)
+        goal_pos: 目标位置 (全局坐标)
+        cur_ori: 当前朝向 (全局坐标)
+        cur_pos_resized: 当前位置 (图像坐标)
+        goal_pos_resized: 目标位置 (图像坐标)
+        cur_ori_resized: 当前朝向 (图像坐标)
+        floorplan_image: 地图图像
+        obs_image: 观测图像
+        predicted_action: 预测的动作 (局部坐标)
+        trajectory_name: 轨迹名称
+        time_step: 时间步
+        to_global_coords_func: 你的坐标转换函数
+        save_path: 保存路径
+        show_obs: 是否显示观测图像
+    """
+    
+    # 创建子图
+    if show_obs and obs_image is not None:
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        fig.suptitle(f'Robot Inference Visualization - {trajectory_name} - Step {time_step}', fontsize=16)
+        main_ax = axes[0, 0]
+    else:
+        fig, main_ax = plt.subplots(1, 1, figsize=(12, 10))
+        fig.suptitle(f'Robot Inference Visualization - {trajectory_name} - Step {time_step}', fontsize=16)
+    
+    # 处理地图图像
+    if isinstance(floorplan_image, torch.Tensor):
+        if floorplan_image.dim() == 4:  # [B, C, H, W]
+            floorplan_np = floorplan_image[0].permute(1, 2, 0).cpu().numpy()
+        elif floorplan_image.dim() == 3:  # [C, H, W]
+            floorplan_np = floorplan_image.permute(1, 2, 0).cpu().numpy()
+        else:
+            floorplan_np = floorplan_image.cpu().numpy()
+    else:
+        floorplan_np = floorplan_image
+    
+    # 归一化图像到 [0, 1]
+    if floorplan_np.max() > 1.0:
+        floorplan_np = floorplan_np / 255.0
+    
+    main_ax.imshow(floorplan_np)
+    
+    # 使用已经转换好的图像坐标
+    cur_pos_img = cur_pos_resized
+    goal_pos_img = goal_pos_resized
+    
+    # 绘制当前位置（绿色圆圈）
+    current_circle = Circle(cur_pos_img, radius=2, color='green', alpha=0.8)
+    main_ax.add_patch(current_circle)
+    # main_ax.text(cur_pos_img[0], cur_pos_img[1]-15, 'Current', 
+    #             ha='center', va='top', color='black', fontweight='bold', fontsize=12)
+    
+    # 绘制目标位置（红色圆圈）
+    goal_circle = Circle(goal_pos_img, radius=2, color='red', alpha=0.8)
+    main_ax.add_patch(goal_circle)
+    # main_ax.text(goal_pos_img[0], goal_pos_img[1]-15, 'Goal',     
+    #             ha='center', va='top', color='black', fontweight='bold', fontsize=12)
+    
+    # 绘制机器人朝向（箭头）
+    arrow_length = 10
+    ori_angle = np.arctan2(cur_ori[1] - cur_pos[1], cur_ori[0] - cur_pos[0])
+    # if isinstance(cur_ori, np.ndarray) and cur_ori.size > 0:
+    #     if len(cur_ori) == 2:
+    #         # 如果朝向是向量形式，计算角度
+    #         ori_angle = np.arctan2(cur_ori[1] - cur_pos[1], cur_ori[0] - cur_pos[0])
+    #     else:
+    #         ori_angle = cur_ori[0] if cur_ori.ndim > 0 else cur_ori
+    # else:
+    #     ori_angle = cur_ori
+    
+    arrow_end_x = cur_pos_img[0] + arrow_length * np.cos(ori_angle)
+    arrow_end_y = cur_pos_img[1] + arrow_length * np.sin(ori_angle)
+    
+    orientation_arrow = FancyArrowPatch(
+        cur_pos_img, (arrow_end_x, arrow_end_y),
+        arrowstyle='->', mutation_scale=15, color='blue', linewidth=2
+    )
+    main_ax.add_patch(orientation_arrow)
+    
+    # 绘制预测轨迹
+    if predicted_action is not None:
+        if isinstance(predicted_action, torch.Tensor):
+            action_np = predicted_action.cpu().numpy()
+        else:
+            action_np = np.array(predicted_action)
+
+
+        trajectory_img_coords  = transform_trajectory_to_image_coords(action_np, floor_shapes_ori[scene_name], image_size)
+        # shortest_path_img_coords = transform_trajectory_to_image_coords(cur_shortest_path, floor_shapes_ori[scene_name], image_size)
+
+        
+        # 绘制轨迹点
+        for i, point in enumerate(trajectory_img_coords):
+            point_circle = Circle(point, radius=0.1, color='cyan', alpha=0.8)
+            main_ax.add_patch(point_circle)
+        # cur shortest_path
+        # for i, point in enumerate(shortest_path_img_coords):
+        #     point_circle = Circle(point, radius=0.1, color='red', alpha=0.8)
+        #     main_ax.add_patch(point_circle)
+
+                
+    # 添加坐标信息文本
+    info_text = f"Global: pos({cur_pos[0]:.2f}, {cur_pos[1]:.2f})\n"
+    info_text += f"Image: pos({cur_pos_img[0]:.1f}, {cur_pos_img[1]:.1f})"
+    main_ax.text(0.02, 0.98, info_text, transform=main_ax.transAxes, 
+                fontsize=10, verticalalignment='top', 
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+    
+    main_ax.set_title('Floorplan with Robot State and Prediction')
+    main_ax.axis('off')
+    main_ax.legend()
+    
+    obs_image = torch.stack(obs_image, dim=0)
+    # 显示观测图像序列
+    if show_obs and obs_image is not None and isinstance(axes, np.ndarray):
+        if isinstance(obs_image, torch.Tensor):
+            obs_np = obs_image.cpu().numpy()
+            
+            if obs_np.ndim == 4:  # [context_size, C, H, W]
+                context_size = min(obs_np.shape[0], 5)
+                positions = [(0,1), (0,2), (1,0), (1,1), (1,2)]
+                
+                for i in range(context_size):
+                    if i < len(positions):
+                        row, col = positions[i]
+                        ax = axes[row, col]
+                        obs_img = obs_np[i].transpose(1, 2, 0)
+                        if obs_img.max() > 1.0:
+                            obs_img = obs_img / 255.0
+                        ax.imshow(obs_img)
+                        ax.set_title(f'Observation t-{context_size-1-i}', fontsize=10)
+                        ax.axis('off')
+                
+                # 隐藏未使用的子图
+                for i in range(context_size, len(positions)):
+                    row, col = positions[i]
+                    axes[row, col].axis('off')
+    
+    plt.tight_layout()
+    
+    # 保存或显示
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Visualization saved to {save_path}")
+    else:
+        plt.show()
+    
+    plt.close()
+    
+def transform_trajectory_to_image_coords(trajectory_global, ori_size, image_resize_size):
+    """
+    将全局坐标的轨迹点转换到图像坐标
+    
+    Args:
+        trajectory_global (np.ndarray): 全局坐标的轨迹点 [N, 2]
+        ori_size (float): 原始图像尺寸
+        image_resize_size (Tuple[int, int]): 调整后的图像尺寸 [width, height]
+    
+    Returns:
+        np.ndarray: 图像坐标的轨迹点 [N, 2]
+    """
+    w0 = ori_size
+    h0 = ori_size
+    
+    # 第一步：全局坐标转换到原始图像像素坐标
+    trajectory_pixel = trajectory_global * 100 + np.array([w0 / 2, h0 / 2])
+    
+    # 第二步：缩放到调整后的图像尺寸
+    trajectory_resized = trajectory_pixel * image_resize_size[0] / w0
+    
+    return trajectory_resized
+
+def img_to_data_and_point_transfer(
+    img: Image.Image,
+    ori_size: float,
+    image_resize_size: Tuple[int, int],
+    cur_pos: np.ndarray,
+    goal_pos: np.ndarray,
+    cur_ori: np.ndarray
+) -> Tuple[torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Transform the input image and transfer the points to local coordinates.
+    
+    Args:
+        img (Image.Image): PIL image object
+        ori_size (float): original reference size
+        image_resize_size (Tuple[int, int]): size to resize the image to [width, height]
+        cur_pos (np.ndarray): current position in pixel coordinates of original image [x,y]
+        goal_pos (np.ndarray): goal position in pixel coordinates of original image
+        cur_ori (np.ndarray): current orientation vector (or point) in original image
+
+    Returns:
+        Tuple[torch.Tensor, np.ndarray, np.ndarray, np.ndarray]:
+            - resized image as tensor
+            - current position in the transformed image size coordinate
+            - goal position in the same coordinate
+            - current orientation in the same coordinate
+    """
+    w0 = ori_size
+    h0 = ori_size
+    w, h = img.size
+
+    # transform positions
+    cur_pos = cur_pos * 100 + np.array([w0 / 2, h0 / 2])
+    goal_pos = goal_pos * 100 + np.array([w0 / 2, h0 / 2])
+    cur_ori = cur_ori * 100 + np.array([w0 / 2, h0 / 2])      
+
+    # resize
+    img = img.resize(image_resize_size)
+    cur_pos_in_resizeSize = cur_pos * image_resize_size[0] / w0
+    goal_pos_in_resizeSize = goal_pos * image_resize_size[0] / w0
+    cur_ori_in_resizeSize = cur_ori * image_resize_size[0] / w0
+
+    # convert to tensor
+    resize_img = TF.to_tensor(img)
+
+    return resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize

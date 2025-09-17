@@ -16,6 +16,10 @@ PREDICT_INTERVAL = 5 # 预测超时时间
 GOAL_POINT_NUM = 16
 MATRIX_WAYPOINT_SPACING = 0.045
 WAYPOINT_SPACING = 1.0
+
+floor_shapes_ori =  np.load(os.path.join("datasets/trav_maps", "floor_shapes.npy"), allow_pickle=True).item()
+
+
 def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None, model_config_path=None):
     
     env_mode = "headless" if headless else "gui_interactive"
@@ -32,6 +36,8 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
         model_config = yaml.safe_load(f)
     
     agent = FloNaAgent(model_path=model_path, model_config=model_config, scene_config=scene_config, metric_waypoint_spacing=MATRIX_WAYPOINT_SPACING, waypoint_spacing=WAYPOINT_SPACING)
+    scene_name = scene_config["scene_id"] + "_" + str(scene_config["floor_num"])
+    print(f"scene_name: {scene_name}")
 
     for episode in range(num_episodes):
         print(f"--- Episode: {episode + 1} ---")
@@ -39,6 +45,7 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
         observation = env.reset()
         floorplan_img_path = os.path.join(scene_config["scene_path"], scene_config["scene_id"], 'floorplan.png')
         print(f"floorplan_img_path: {floorplan_img_path}")
+        # floorplan_img = Image.open(floorplan_img_path)
         floorplan_img = cv2.imread(floorplan_img_path)
         floorplan_img = cv2.cvtColor(floorplan_img, cv2.COLOR_BGR2RGB)
         action = [0, 0]
@@ -82,6 +89,17 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
             target_pos = env.task.target_pos[:2].copy()
             FLOOR_Z = env.task.target_pos[2]
             obs_img = state["rgb"]
+            
+            
+            # get obs and visualize
+            
+            
+            # visualize_robot_inference_with_coords(
+            #     cur_pos = robot_pos,
+            #     goal_pos = target_pos,
+            #     cur_ori = robot_ori,
+                
+            # )
             
             agent.update_vision_input(
                 obs_img=obs_img,

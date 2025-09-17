@@ -486,8 +486,8 @@ def execute_model(
     transform: transforms,
     device: torch.device,
     noise_scheduler: DDPMScheduler,
-    # floorplan_ary: np.ndarray,
-    # log_add: str = None,
+    floorplan_ary: np.ndarray,
+    log_add: str = None,
 ):
     """
     Execute the model on the given data.
@@ -510,6 +510,8 @@ def execute_model(
     cur_heading = torch.as_tensor(cur_heading, dtype=torch.float32)
     goal_pos = torch.as_tensor(goal_pos, dtype=torch.float32)
     cur_obs = torch.as_tensor(cur_obs, dtype=torch.float32)
+    # print(cur_obs.shape)
+    # print(cur_obs)
     floorplan = torch.as_tensor(floorplan, dtype=torch.float32)
     cur_pos /= metric_waypoint_spacing * waypoint_spacing
     cur_heading /= metric_waypoint_spacing * waypoint_spacing
@@ -518,8 +520,6 @@ def execute_model(
     batch_cur_obss = [transform(obs) for obs in cur_obss]
     batch_cur_obss = torch.cat(batch_cur_obss, dim=1).to(device)  # (1,3*L,h,w)
     batch_floorplan = transform(floorplan).to(device)  # (1,3,h,w)
-    
-
     
     model_output_dict = model_output(
         model,
@@ -543,6 +543,9 @@ def execute_model(
     actions_meter_global = actions_normed_global * metric_waypoint_spacing * waypoint_spacing
     
     # if log_add is not None:
+    #     import os
+    #     os.makedirs(log_add, exist_ok=True)  # 确保文件夹存在
+
     #     save_action = actions.cpu().detach().numpy()
     #     gs = gridspec.GridSpec(6, 6)
     #     gs.update(wspace = 0.9, hspace = 0.7)
@@ -550,15 +553,18 @@ def execute_model(
     #     ax2 = plt.subplot(gs[:2, 2:])
     #     ax3 = plt.subplot(gs[2:, :3])
     #     ax4 = plt.subplot(gs[2:, 3:])
+
+    #     goal_pos_metric = goal_pos * metric_waypoint_spacing * waypoint_spacing
         
-    #     goal_pos_metric = goal_pos * metric_waipoint_spacing * waypoint_spacing
     #     floor_width = floorplan_ary.shape[0]
     #     end_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
     #     start_xy = np.flip((np.array(goal_pos_metric[0]) / 0.01 + floor_width / 2.0)).astype(int)
-    #     floorplan_ary[max(0, end_xy[0]-5) : min(end_xy[0]+5, floorplan_ary.shape[0]), max(0, end_xy[1]-5) : min(end_xy[1]+5, floorplan_ary.shape[1]), :] = np.array([0, 0, 255, 255])
-        
-    #     ax1.imshow(cur_obs[-1].permute(1,2,0).cpu().detach().numpy())
+    #     floorplan_ary[max(0, end_xy[0]-5) : min(end_xy[0]+5, floorplan_ary.shape[0]),
+    #                 max(0, end_xy[1]-5) : min(end_xy[1]+5, floorplan_ary.shape[1]), :] = np.array([0, 0, 255, 255])
+
+    #     ax1.imshow(np.clip(cur_obs[-1].permute(1,2,0).cpu().detach().numpy(), 0, 255))
     #     ax2.plot(save_action[:,0], save_action[:,1], marker = '.')
+        
     #     for i, xy in enumerate(actions_meter_global):
     #         map_xy = np.flip((np.array(xy) / 0.01 + floor_width / 2.0)).astype(int)
     #         if i == 0:
@@ -569,12 +575,18 @@ def execute_model(
     #         else:
     #             color = np.array([0, 255, 0, 30])
     #             floorplan_ary[map_xy[0]-1 : map_xy[0]+1, map_xy[1]-1 : map_xy[1]+1, :] = color
-            
-    #     ax3.imshow(floorplan_ary[max(0, start_xy[0]-200) : min(start_xy[0]+200, floorplan_ary.shape[0]), max(0, start_xy[1]-200) : min(start_xy[1]+200, floorplan_ary.shape[1]), :])
+
+    #     ax3.imshow(floorplan_ary[max(0, start_xy[0]-200) : min(start_xy[0]+200, floorplan_ary.shape[0]),
+    #                             max(0, start_xy[1]-200) : min(start_xy[1]+200, floorplan_ary.shape[1]), :])
     #     ax4.imshow(floorplan_ary)
 
-    #     plt.savefig(os.path.join(log_add))
-    
+    #     # 保存到具体文件名
+    #     import time
+    #     filename = os.path.join(log_add, f"visualization_{int(time.time()*1000)}.png")
+    #     plt.savefig(filename)
+    #     plt.close()  # 关闭当前 figure 避免内存泄露
+    #     print('Visualization saved to', filename)
+    #     # print('save to ', os.path.join(log_add))
     return actions_meter_global    
     
 # normalize data

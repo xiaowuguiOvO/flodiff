@@ -26,15 +26,15 @@ def get_last_shortest_path_index(traj_dir: str) -> int:
                     max_id = num
     return max_id
 
-def get_input_data(cur_pos, goal_pos, cur_ori, img_path, floorplan_path, trajectory_name, scene_name, curr_time):
+def get_input_data(cur_pos_meter, goal_pos_meter, cur_ori, img_path, floorplan_path, trajectory_name, scene_name, curr_time):
     metric_waypoint_spacing = config["metric_waypoint_spacing"]
     waypoint_spacing = config["waypoint_spacing"]
     context_size = config["context_size"]
     
-    # if config['normalize']:
-    #     goal_pos /= metric_waypoint_spacing * waypoint_spacing
-    #     cur_pos /= metric_waypoint_spacing * waypoint_spacing
-    #     cur_ori /= metric_waypoint_spacing * waypoint_spacing
+    if config['normalize']:
+        goal_pos_metric = goal_pos_meter / (metric_waypoint_spacing * waypoint_spacing)
+        cur_pos_metric = cur_pos_meter / (metric_waypoint_spacing * waypoint_spacing)
+        cur_ori /= metric_waypoint_spacing * waypoint_spacing
 
     context = []
     context_times = list(
@@ -46,14 +46,14 @@ def get_input_data(cur_pos, goal_pos, cur_ori, img_path, floorplan_path, traject
     )
     context = [(trajectory_name, t) for t in context_times]
 
-    floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized = load_image_and_transform_points(scene_name, trajectory_name, cur_pos, goal_pos, cur_ori, "floorplan")
+    floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized = load_image_and_transform_points(scene_name, trajectory_name, cur_pos_metric, goal_pos_metric, cur_ori, "floorplan")
 
     # 1. 先生成一个包含所有独立图片张量的列表
     image_list = [load_image(scene_name, f, t) for f, t in context]
     
     # 2. 使用 torch.stack 在第 0 维创建一个新的批次维度 (L)
     obs_image = torch.stack(image_list, dim=0)
-    return cur_pos, cur_ori, goal_pos, obs_image, floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized
+    return  cur_ori, obs_image, floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized
 
 def load_image(scene_name, trajectory_name, name): 
     if name == "floorplan":
@@ -92,7 +92,7 @@ def load_image_and_transform_points(scene_name, trajectory_name, cur_pos, goal_p
 def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_resized, 
                                          goal_pos_resized, cur_ori_resized, floorplan_image, 
                                          obs_image, predicted_action, trajectory_name, time_step, 
-                                         to_global_coords_func, save_path=None, show_obs=True):
+                                         to_global_coords_func, save_path=None, show_obs=True, cur_shortest_path=None):
     """
     可视化机器人推理过程（使用你的坐标转换函数）
     
@@ -146,32 +146,33 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
     # 绘制当前位置（绿色圆圈）
     current_circle = Circle(cur_pos_img, radius=2, color='green', alpha=0.8)
     main_ax.add_patch(current_circle)
-    main_ax.text(cur_pos_img[0], cur_pos_img[1]-15, 'Current', 
-                ha='center', va='top', color='white', fontweight='bold', fontsize=12)
+    # main_ax.text(cur_pos_img[0], cur_pos_img[1]-15, 'Current', 
+    #             ha='center', va='top', color='black', fontweight='bold', fontsize=12)
     
     # 绘制目标位置（红色圆圈）
     goal_circle = Circle(goal_pos_img, radius=2, color='red', alpha=0.8)
     main_ax.add_patch(goal_circle)
-    main_ax.text(goal_pos_img[0], goal_pos_img[1]-15, 'Goal', 
-                ha='center', va='top', color='white', fontweight='bold', fontsize=12)
+    # main_ax.text(goal_pos_img[0], goal_pos_img[1]-15, 'Goal',     
+    #             ha='center', va='top', color='black', fontweight='bold', fontsize=12)
     
     # 绘制机器人朝向（箭头）
     arrow_length = 10
-    if isinstance(cur_ori, np.ndarray) and cur_ori.size > 0:
-        if len(cur_ori) == 2:
-            # 如果朝向是向量形式，计算角度
-            ori_angle = np.arctan2(cur_ori[1] - cur_pos[1], cur_ori[0] - cur_pos[0])
-        else:
-            ori_angle = cur_ori[0] if cur_ori.ndim > 0 else cur_ori
-    else:
-        ori_angle = cur_ori
+    ori_angle = np.arctan2(cur_ori[1] - cur_pos[1], cur_ori[0] - cur_pos[0])
+    # if isinstance(cur_ori, np.ndarray) and cur_ori.size > 0:
+    #     if len(cur_ori) == 2:
+    #         # 如果朝向是向量形式，计算角度
+    #         ori_angle = np.arctan2(cur_ori[1] - cur_pos[1], cur_ori[0] - cur_pos[0])
+    #     else:
+    #         ori_angle = cur_ori[0] if cur_ori.ndim > 0 else cur_ori
+    # else:
+    #     ori_angle = cur_ori
     
     arrow_end_x = cur_pos_img[0] + arrow_length * np.cos(ori_angle)
     arrow_end_y = cur_pos_img[1] + arrow_length * np.sin(ori_angle)
     
     orientation_arrow = FancyArrowPatch(
         cur_pos_img, (arrow_end_x, arrow_end_y),
-        arrowstyle='->', mutation_scale=25, color='blue', linewidth=3
+        arrowstyle='->', mutation_scale=15, color='blue', linewidth=2
     )
     main_ax.add_patch(orientation_arrow)
     
@@ -181,36 +182,21 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
             action_np = predicted_action.cpu().numpy()
         else:
             action_np = np.array(predicted_action)
-        
-        
-        trajectory_coords_metric = action_np * metric_waypoint_spacing * waypoint_spacing
-        trajectory_img_coords  = transform_trajectory_to_image_coords(trajectory_coords_metric, floor_shapes_ori[scene_name], image_size)
-        
-        # 直接将 (32,2) 的局部坐标转换为全局坐标
-        # trajectory_global = to_global_coords(action_np, cur_pos, cur_ori)
-        # print('action 0 ', action_np[0])
-        # trajectory_global = action_np.copy()
-        # print('trajectory_global 0 ', trajectory_global[0]) 
-        # print("Predicted trajectory (global coords):", trajectory_global)
-        # 添加当前位置作为起点
-        # trajectory_with_start = np.vstack([cur_pos.reshape(1, -1), trajectory_global])
-        
-        # 绘制预测轨迹线条
-        # main_ax.plot(trajectory_with_start[:, 0], trajectory_with_start[:, 1], 
-        #             'b-', linewidth=3, alpha=0.7, label='Predicted Trajectory')
+
+
+        trajectory_img_coords  = transform_trajectory_to_image_coords(action_np, floor_shapes_ori[scene_name], image_size)
+        shortest_path_img_coords = transform_trajectory_to_image_coords(cur_shortest_path, floor_shapes_ori[scene_name], image_size)
+
         
         # 绘制轨迹点
         for i, point in enumerate(trajectory_img_coords):
             point_circle = Circle(point, radius=0.1, color='cyan', alpha=0.8)
             main_ax.add_patch(point_circle)
-            
-            # 标记第一个和最后一个点
-            # if i == 0:
-            #     main_ax.text(point[0], point[1]-8, f'Step 1', 
-            #                 ha='center', va='top', color='white', fontweight='bold', fontsize=8)
-            # elif i == len(trajectory_global) - 1:
-            #     main_ax.text(point[0], point[1]-8, f'Step {len(trajectory_global)}', 
-            #                 ha='center', va='top', color='white', fontweight='bold', fontsize=8)
+        # cur shortest_path
+        for i, point in enumerate(shortest_path_img_coords):
+            point_circle = Circle(point, radius=0.1, color='red', alpha=0.8)
+            main_ax.add_patch(point_circle)
+
                 
     # 添加坐标信息文本
     info_text = f"Global: pos({cur_pos[0]:.2f}, {cur_pos[1]:.2f})\n"
@@ -290,8 +276,10 @@ test_dir = 'datasets/scenes_117/test'
 scene_dir = os.path.join(test_dir, scene_name)
 trav_folder = 'datasets/trav_maps'
 data_folder = 'datasets/scenes_117/test'
+model_path = 'checkpoints/ema_9.pth'
 floor_shapes_ori =  np.load(os.path.join(trav_folder, "floor_shapes.npy"), allow_pickle=True).item()
 image_size = config["image_size"]
+
 
 
 vision_encoder = flona_ViNT(
@@ -320,45 +308,58 @@ noise_scheduler = DDPMScheduler(
     clip_sample=True,
     prediction_type='epsilon'
 )
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+state_dict = torch.load(model_path, map_location=device)
+model.load_state_dict(state_dict)
+model.eval()
+model.to(device)
+
 
 metric_waypoint_spacing = config["metric_waypoint_spacing"]
 waypoint_spacing = config["waypoint_spacing"]
-device = 'cpu'
+# device = 'cpu'
+
 transform = ([
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 transform = transforms.Compose(transform)
 
-viz_dir = "visualizations"
+viz_dir = "visualization_test"
 os.makedirs(viz_dir, exist_ok=True)
 for name in os.listdir(scene_dir):
     full_path = os.path.join(scene_dir, name)
     floorplan_path = os.path.join(scene_dir, 'floorplan.png')
+    
     if os.path.isdir(full_path) and name.startswith("traj_"):
         number = name.split("_")[1]     
         traj_data = np.load(os.path.join(full_path, 'traj_' + number + '.npy'))  # (N, 5), x, y, yaw, collision, stop
-        original_goal_pos = traj_data[-2,:2].copy()
+        goal_pos_meter = traj_data[-2,:2].copy()
+        
         # 遍历有shortest path的
         max_id = get_last_shortest_path_index(full_path)
         for i in range(5, max_id + 1, 5):
             img_path = os.path.join(full_path, '000' + str(i) + '.png')
-            pos = traj_data[i, :2].copy()
-            yaw = traj_data[i, 2:].copy()
-        #   print('Position:', pos)
-        #   print('Yaw:', yaw)
-          
-            cur_pos, cur_heading, input_goal_pos, obs_image, floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized = get_input_data(pos, original_goal_pos.copy(), yaw, img_path, floorplan_path, 'traj_' + number, scene_name, i)
-          
-            cur_pos_b = cur_pos[np.newaxis, :]
-            cur_heading_b = cur_heading[np.newaxis, :]
-            input_goal_pos_b = input_goal_pos[np.newaxis, :]
-            # obs_image = obs_image.unsqueeze(0)
+            cur_pos_meter = traj_data[i, :2].copy()
+            cur_heading_meter = traj_data[i, 2:].copy()
+
+            # get shortest path
+            shortest_path_traj_path = os.path.join(full_path, 'shortest_paths', f'shortest_path_for_{i:05d}.npy')
+            cur_shortest_path = np.load(shortest_path_traj_path)  # (M, 3), x, y, yaw
+            cur_shortest_path_xy = cur_shortest_path[:, :2]
+            
+            cur_heading_metric, obs_image, floorplan_image, cur_pos_resized, goal_pos_resized, cur_ori_resized = get_input_data(cur_pos_meter, goal_pos_meter, cur_heading_meter.copy(), img_path, floorplan_path, 'traj_' + number, scene_name, i)
+            # print(cur_pos_meter, goal_pos_meter)
+            cur_pos_b = cur_pos_meter[np.newaxis, :]
+            cur_heading_b = cur_heading_meter[np.newaxis, :]
+            goal_pos_b = goal_pos_meter[np.newaxis, :]
             floorplan_image = floorplan_image.unsqueeze(0)
+            floorplan_ary = np.array(floorplan_image[0].permute(1, 2, 0).cpu())
+            floorplan_ary = np.concatenate([floorplan_ary, 255*np.ones((*floorplan_ary.shape[:2],1), dtype=np.uint8)], axis=-1)
             action = execute_model(
               model = model,
               cur_pos = cur_pos_b,
               cur_heading = cur_heading_b,
-              goal_pos = input_goal_pos_b,
+              goal_pos = goal_pos_b,
               cur_obs = obs_image,
               floorplan = floorplan_image,
               metric_waypoint_spacing = metric_waypoint_spacing,
@@ -366,15 +367,14 @@ for name in os.listdir(scene_dir):
               transform = transform,
               device = device,
               noise_scheduler = noise_scheduler,
-            #   floorplan_ary = floorplan_ary,
-            #   log_add = log_add,
+              floorplan_ary = floorplan_ary,
+              log_add = 'execute_log',
           )
-            # print('Predicted next position:', action[0], 'traj_', number, 'time', i)
             # 添加可视化调用
             visualize_robot_inference_with_coords(
-                cur_pos=cur_pos,
-                goal_pos=input_goal_pos, 
-                cur_ori=cur_heading,
+                cur_pos=cur_pos_meter,
+                goal_pos=goal_pos_meter,
+                cur_ori=cur_heading_meter,
                 cur_pos_resized=cur_pos_resized,
                 goal_pos_resized=goal_pos_resized,
                 cur_ori_resized=cur_ori_resized,
@@ -384,8 +384,7 @@ for name in os.listdir(scene_dir):
                 trajectory_name=f'traj_{number}',
                 time_step=i,
                 to_global_coords_func=to_global_coords,  # 使用你的函数
-                save_path=os.path.join(viz_dir, f"inference_step_{i}.png"),
-                show_obs=True
+                save_path=os.path.join(viz_dir, f"traj_{number}, inference_step_{i}.png"),
+                show_obs=True,
+                cur_shortest_path=cur_shortest_path_xy,
             )
-            # print("pos:", cur_pos, "goal:", original_goal_pos, "cur_ori:", cur_heading)
-            # print('Predicted next position:', action[0], 'traj_', number, 'time', i)
