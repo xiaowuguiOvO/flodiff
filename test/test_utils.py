@@ -607,159 +607,172 @@ def visualize_diffusion_action_distribution(
     fig.tight_layout()
     fig.canvas.draw()
     fig.canvas.flush_events()
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, FancyArrowPatch
 
-def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_resized, 
-                                         goal_pos_resized, cur_ori_resized, floorplan_image, 
-                                         obs_image, predicted_action, trajectory_name, time_step, 
-                                         to_global_coords_func, save_path=None, show_obs=True, cur_shortest_path=None, floor_shapes_ori=None, scene_name=None, image_size=None):
+# 我将你的 transform_trajectory_to_image_coords 函数放在前面，以便整个代码块可以直接运行
+def transform_trajectory_to_image_coords(trajectory_global, ori_size, image_resize_size):
     """
-    可视化机器人推理过程（使用你的坐标转换函数）
+    将全局坐标的轨迹点转换到图像坐标
     
     Args:
-        cur_pos: 当前位置 (全局坐标)
-        goal_pos: 目标位置 (全局坐标)
-        cur_ori: 当前朝向 (全局坐标)
-        cur_pos_resized: 当前位置 (图像坐标)
-        goal_pos_resized: 目标位置 (图像坐标)
-        cur_ori_resized: 当前朝向 (图像坐标)
-        floorplan_image: 地图图像
-        obs_image: 观测图像
-        predicted_action: 预测的动作 (局部坐标)
-        trajectory_name: 轨迹名称
-        time_step: 时间步
-        to_global_coords_func: 你的坐标转换函数
-        save_path: 保存路径
-        show_obs: 是否显示观测图像
+        trajectory_global (np.ndarray): 全局坐标的轨迹点 [N, 2]
+        ori_size (float): 原始图像尺寸
+        image_resize_size (Tuple[int, int]): 调整后的图像尺寸 [width, height]
+    
+    Returns:
+        np.ndarray: 图像坐标的轨迹点 [N, 2]
     """
+    w0 = h0 = ori_size
+    # 第一步：全局坐标转换到原始图像像素坐标
+    trajectory_pixel = trajectory_global * 100 + np.array([w0 / 2, h0 / 2])
+    # 第二步：缩放到调整后的图像尺寸
+    trajectory_resized = trajectory_pixel * image_resize_size[0] / w0
+    return trajectory_resized
+
+def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_resized, 
+                                        goal_pos_resized, cur_ori_resized, floorplan_image, 
+                                        navigable_map_image=None,
+                                        obs_image=None, predicted_action=None, trajectory_name=None, time_step=None, 
+                                        save_path=None, show_obs=True, floor_shapes_ori=None, 
+                                        scene_id=None, scene_floor=None, image_size=None):
+    """
+    可视化机器人推理过程，可同时显示 floorplan 和 navigable map。
+    """
+    scene_name = f"{scene_id}_{scene_floor}"
     
-    # 创建子图
+    has_nav_map = navigable_map_image is not None
+    
+    # --- 1. 创建子图布局 ---
     if show_obs and obs_image is not None:
+        # 如果显示观测图，创建一个 2x3 的网格
+        # axes[0,0] 用于 floorplan, axes[0,1] 用于 navigable_map
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-        fig.suptitle(f'Robot Inference Visualization - {trajectory_name} - Step {time_step}', fontsize=16)
-        main_ax = axes[0, 0]
+        floorplan_ax = axes[0, 0]
+        nav_ax = axes[0, 1] if has_nav_map else None # 如果有nav map，则指定它的绘图区
     else:
-        fig, main_ax = plt.subplots(1, 1, figsize=(12, 10))
-        fig.suptitle(f'Robot Inference Visualization - {trajectory_name} - Step {time_step}', fontsize=16)
-    
-    # 处理地图图像
-    if isinstance(floorplan_image, torch.Tensor):
-        if floorplan_image.dim() == 4:  # [B, C, H, W]
-            floorplan_np = floorplan_image[0].permute(1, 2, 0).cpu().numpy()
-        elif floorplan_image.dim() == 3:  # [C, H, W]
-            floorplan_np = floorplan_image.permute(1, 2, 0).cpu().numpy()
+        # 如果不显示观测图，根据地图数量创建 1x1 或 1x2 的网格
+        num_maps = 2 if has_nav_map else 1
+        fig, axes = plt.subplots(1, num_maps, figsize=(9 * num_maps, 8))
+        if num_maps == 1:
+            floorplan_ax = axes
+            nav_ax = None
         else:
-            floorplan_np = floorplan_image.cpu().numpy()
-    else:
-        floorplan_np = floorplan_image
+            floorplan_ax = axes[0]
+            nav_ax = axes[1]
+
+    fig.suptitle(f'Robot Inference Visualization - {trajectory_name} - Step {time_step}', fontsize=16)
     
-    # 归一化图像到 [0, 1]
-    if floorplan_np.max() > 1.0:
-        floorplan_np = floorplan_np / 255.0
-    
-    main_ax.imshow(floorplan_np)
-    
-    # 使用已经转换好的图像坐标
+    # --- 预处理坐标和轨迹 (只计算一次) ---
     cur_pos_img = cur_pos_resized
     goal_pos_img = goal_pos_resized
     
-    # 绘制当前位置（绿色圆圈）
-    current_circle = Circle(cur_pos_img, radius=2, color='green', alpha=0.8)
-    main_ax.add_patch(current_circle)
-    # main_ax.text(cur_pos_img[0], cur_pos_img[1]-15, 'Current', 
-    #             ha='center', va='top', color='black', fontweight='bold', fontsize=12)
+    trajectory_img_coords = None
+    if predicted_action is not None:
+        action_np = predicted_action.cpu().numpy() if isinstance(predicted_action, torch.Tensor) else np.array(predicted_action)
+        trajectory_img_coords = transform_trajectory_to_image_coords(action_np, floor_shapes_ori[scene_name], image_size)
+
+    # --- 2. 处理和绘制 Floorplan Map ---
+    # a. 处理图像
+    if isinstance(floorplan_image, torch.Tensor):
+        if floorplan_image.dim() == 4: floorplan_np = floorplan_image[0].permute(1, 2, 0).cpu().numpy()
+        elif floorplan_image.dim() == 3: floorplan_np = floorplan_image.permute(1, 2, 0).cpu().numpy()
+        else: floorplan_np = floorplan_image.cpu().numpy()
+    else:
+        floorplan_np = np.array(floorplan_image)
+    if floorplan_np.max() > 1.0: floorplan_np = floorplan_np / 255.0
     
-    # 绘制目标位置（红色圆圈）
-    goal_circle = Circle(goal_pos_img, radius=2, color='red', alpha=0.8)
-    main_ax.add_patch(goal_circle)
-    # main_ax.text(goal_pos_img[0], goal_pos_img[1]-15, 'Goal',     
-    #             ha='center', va='top', color='black', fontweight='bold', fontsize=12)
+    # b. 在 floorplan_ax 上绘制所有元素
+    floorplan_ax.imshow(floorplan_np)
+    floorplan_ax.add_patch(Circle(cur_pos_img, radius=2, color='green', alpha=0.8, label='Current'))
+    floorplan_ax.add_patch(Circle(goal_pos_img, radius=2, color='red', alpha=0.8, label='Goal'))
     
-    # 绘制机器人朝向（箭头）
-    arrow_length = 10
+    arrow_length = 15
     ori_angle = np.arctan2(cur_ori[1] - cur_pos[1], cur_ori[0] - cur_pos[0])
-    # if isinstance(cur_ori, np.ndarray) and cur_ori.size > 0:
-    #     if len(cur_ori) == 2:
-    #         # 如果朝向是向量形式，计算角度
-    #         ori_angle = np.arctan2(cur_ori[1] - cur_pos[1], cur_ori[0] - cur_pos[0])
-    #     else:
-    #         ori_angle = cur_ori[0] if cur_ori.ndim > 0 else cur_ori
-    # else:
-    #     ori_angle = cur_ori
-    
     arrow_end_x = cur_pos_img[0] + arrow_length * np.cos(ori_angle)
     arrow_end_y = cur_pos_img[1] + arrow_length * np.sin(ori_angle)
-    
-    orientation_arrow = FancyArrowPatch(
-        cur_pos_img, (arrow_end_x, arrow_end_y),
-        arrowstyle='->', mutation_scale=15, color='blue', linewidth=2
-    )
-    main_ax.add_patch(orientation_arrow)
-    
-    # 绘制预测轨迹
-    if predicted_action is not None:
-        if isinstance(predicted_action, torch.Tensor):
-            action_np = predicted_action.cpu().numpy()
-        else:
-            action_np = np.array(predicted_action)
+    floorplan_ax.add_patch(FancyArrowPatch(cur_pos_img, (arrow_end_x, arrow_end_y), arrowstyle='->', mutation_scale=20, color='blue', linewidth=2, label='Orientation'))
 
-
-        trajectory_img_coords  = transform_trajectory_to_image_coords(action_np, floor_shapes_ori[scene_name], image_size)
-        # shortest_path_img_coords = transform_trajectory_to_image_coords(cur_shortest_path, floor_shapes_ori[scene_name], image_size)
-
-        
-        # 绘制轨迹点
+    if trajectory_img_coords is not None:
         for i, point in enumerate(trajectory_img_coords):
-            point_circle = Circle(point, radius=0.1, color='cyan', alpha=0.8)
-            main_ax.add_patch(point_circle)
-        # cur shortest_path
-        # for i, point in enumerate(shortest_path_img_coords):
-        #     point_circle = Circle(point, radius=0.1, color='red', alpha=0.8)
-        #     main_ax.add_patch(point_circle)
-
-                
-    # 添加坐标信息文本
-    info_text = f"Global: pos({cur_pos[0]:.2f}, {cur_pos[1]:.2f})\n"
-    info_text += f"Image: pos({cur_pos_img[0]:.1f}, {cur_pos_img[1]:.1f})"
-    main_ax.text(0.02, 0.98, info_text, transform=main_ax.transAxes, 
-                fontsize=10, verticalalignment='top', 
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-    
-    main_ax.set_title('Floorplan with Robot State and Prediction')
-    main_ax.axis('off')
-    main_ax.legend()
-    
-    obs_image = torch.stack(obs_image, dim=0)
-    # 显示观测图像序列
-    if show_obs and obs_image is not None and isinstance(axes, np.ndarray):
-        if isinstance(obs_image, torch.Tensor):
-            obs_np = obs_image.cpu().numpy()
+            lbl = 'Prediction' if i == 0 else None
+            floorplan_ax.add_patch(Circle(point, radius=0.2, color='cyan', alpha=0.8, label=lbl))
             
-            if obs_np.ndim == 4:  # [context_size, C, H, W]
-                context_size = min(obs_np.shape[0], 5)
-                positions = [(0,1), (0,2), (1,0), (1,1), (1,2)]
-                
-                for i in range(context_size):
-                    if i < len(positions):
-                        row, col = positions[i]
-                        ax = axes[row, col]
-                        obs_img = obs_np[i].transpose(1, 2, 0)
-                        if obs_img.max() > 1.0:
-                            obs_img = obs_img / 255.0
-                        ax.imshow(obs_img)
-                        ax.set_title(f'Observation t-{context_size-1-i}', fontsize=10)
-                        ax.axis('off')
-                
-                # 隐藏未使用的子图
-                for i in range(context_size, len(positions)):
-                    row, col = positions[i]
-                    axes[row, col].axis('off')
+    info_text = f"Global: pos({cur_pos[0]:.2f}, {cur_pos[1]:.2f})\nImage: pos({cur_pos_img[0]:.1f}, {cur_pos_img[1]:.1f})"
+    floorplan_ax.text(0.02, 0.98, info_text, transform=floorplan_ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
     
-    plt.tight_layout()
+    floorplan_ax.set_title('Floorplan View')
+    floorplan_ax.axis('off')
+    floorplan_ax.legend()
+
+    # --- 3. 处理和绘制 Navigable Map (如果存在) ---
+    if has_nav_map and nav_ax is not None:
+        # a. 处理图像 (逻辑和上面完全一样)
+        if isinstance(navigable_map_image, torch.Tensor):
+            if navigable_map_image.dim() == 4: nav_map_np = navigable_map_image[0].permute(1, 2, 0).cpu().numpy()
+            elif navigable_map_image.dim() == 3: nav_map_np = navigable_map_image.permute(1, 2, 0).cpu().numpy()
+            else: nav_map_np = navigable_map_image.cpu().numpy()
+        else:
+            nav_map_np = np.array(navigable_map_image)
+        if nav_map_np.max() > 1.0: nav_map_np = nav_map_np / 255.0
+
+        # b. 在 nav_ax 上绘制所有元素 (逻辑和上面完全一样)
+        nav_ax.imshow(nav_map_np, cmap='gray')
+        nav_ax.add_patch(Circle(cur_pos_img, radius=2, color='green', alpha=0.8, label='Current'))
+        nav_ax.add_patch(Circle(goal_pos_img, radius=2, color='red', alpha=0.8, label='Goal'))
+        nav_ax.add_patch(FancyArrowPatch(cur_pos_img, (arrow_end_x, arrow_end_y), arrowstyle='->', mutation_scale=20, color='blue', linewidth=2, label='Orientation'))
+
+        if trajectory_img_coords is not None:
+            for i, point in enumerate(trajectory_img_coords):
+                lbl = 'Prediction' if i == 0 else None
+                nav_ax.add_patch(Circle(point, radius=0.2, color='cyan', alpha=0.8, label=lbl))
+
+        nav_ax.text(0.02, 0.98, info_text, transform=nav_ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+
+        nav_ax.set_title('Navigable Map View')
+        nav_ax.axis('off')
+        nav_ax.legend()
     
-    # 保存或显示
+    # --- 4. 显示观测图像序列 ---
+    if show_obs and obs_image is not None:
+        obs_stack = torch.stack(obs_image, dim=0)
+        obs_np_all = obs_stack.cpu().numpy()
+        
+        # 定义 obs 的显示位置，避开地图用的位置
+        positions = [(0, 2), (1, 0), (1, 1), (1, 2)] 
+        # 如果 navigable map 不存在，可以多用一个位置
+        if not has_nav_map:
+            positions.insert(0, (0, 1))
+
+        context_size = min(obs_np_all.shape[0], len(positions))
+        
+        for i in range(context_size):
+            row, col = positions[i]
+            ax = axes[row, col]
+            obs_img = obs_np_all[i].transpose(1, 2, 0)
+            if obs_img.max() > 1.0: obs_img /= 255.0
+            ax.imshow(obs_img)
+            ax.set_title(f'Observation t-{context_size-1-i}')
+            ax.axis('off')
+            
+        # 隐藏所有未使用的子图
+        all_used_axes = {floorplan_ax}
+        if nav_ax: all_used_axes.add(nav_ax)
+        for i in range(context_size):
+            all_used_axes.add(axes[positions[i][0], positions[i][1]])
+        
+        for ax in axes.flatten():
+            if ax not in all_used_axes:
+                ax.axis('off')
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    
+    # --- 5. 保存或显示 ---
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        print(f"Visualization saved to {save_path}")
+        # print(f"Visualization saved to {save_path}")
     else:
         plt.show()
     
@@ -833,3 +846,4 @@ def img_to_data_and_point_transfer(
     resize_img = TF.to_tensor(img)
 
     return resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize
+

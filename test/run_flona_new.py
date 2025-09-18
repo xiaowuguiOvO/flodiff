@@ -145,6 +145,10 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
         
                 # visualize_diffusion_action_distribution(actions_abs, actions_local, goal_pos_abs, goal_pos_local, global_ori, ground_truth_dist, model_output_dist, obs_np)
                 
+                # load navigable map
+                navigable_map_path = os.path.join(f"iGibson/igibson/data/g_dataset/{scene_config['scene_id']}", f"floor_trav_{scene_config['floor_num']}_v3.png")
+                navigable_map = Image.open(navigable_map_path)
+                navigable_map = navigable_map.resize((96, 96))
                 visualize_robot_inference_with_coords(
                     cur_pos=agent.obs_pos,
                     goal_pos=agent.goal_pos,
@@ -157,13 +161,14 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                     predicted_action=actions_meter_global,
                     trajectory_name=f'traj_{step}',
                     time_step=step,
-                    to_global_coords_func=to_global_coords,  # 使用你的函数
                     save_path=os.path.join(viz_dir, f"episode_{episode}, inference_step_{step}.png"),
                     show_obs=True,
                     # cur_shortest_path=cur_shortest_path_xy,
                     floor_shapes_ori=floor_shapes_ori,
-                    scene_name=scene_name,
-                    image_size=image_size
+                    scene_id=scene_config["scene_id"],
+                    scene_floor=scene_config["floor_num"],
+                    image_size=image_size,
+                    navigable_map_image=navigable_map
                 )
             # directly set robot to goal point
             
