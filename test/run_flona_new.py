@@ -46,27 +46,16 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
         floorplan_img_path = os.path.join(scene_config["scene_path"], scene_config["scene_id"], 'floorplan.png')
         print(f"floorplan_img_path: {floorplan_img_path}")
         floorplan_img = Image.open(floorplan_img_path)
-        # floorplan_img = cv2.imread(floorplan_img_path)
-        # floorplan_img = cv2.cvtColor(floorplan_img, cv2.COLOR_BGR2RGB)
+
         action = [0, 0]
-        prev_line_ids = []
-        # pd controller
-        pd = PDController(Kp_lin=1, Kd_lin=0.0, Kp_ang=0.5, Kd_ang=0.1)
-        IS_ARRIVE_FLAG = True
         IS_DECISION_FLAG = True
-        goal_point_idx = 0
-        goal_point = np.array([0, 0]) # 目标点
-        prev_time = time.time()
-        last_predict_time = prev_time - PREDICT_INTERVAL  # 强制第一次立即预测
         
         # init state
         obs_img = observation["rgb"]
         robot_pos = env.robots[0].get_position()[:2]  # ground truth
-        robot_ori = env.robots[0].get_rpy()[2]
         target_pos = env.task.target_pos[:2].copy()  # ground truth
         robot_ori_point = robot_pos # init ori point
         next_goal_point = np.array([0, 0])
-        decision_goal_point = np.array([0, 0])
         trajectory = np.zeros((32, 2))
         next_goal_point_idx = 0
         
@@ -87,7 +76,6 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
             action = [0, 0]
             state, reward, done, info = env.step(action)
             
-
             # get observation
             robot_pos = env.robots[0].get_position()[:2] # ground truth
             robot_yaw = env.robots[0].get_rpy()[2]
@@ -106,7 +94,6 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 cur_ori=robot_ori_point
             )
 
-            
             agent.update_vision_input(
                 obs_img=obs_img,
                 floorplan_img=floorplan_img_resize,
@@ -116,21 +103,21 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 )
             
             # check collision
-            # if monitor.update(step):
-            #     print(f"Step {step}: Collision detected.")
-            #     # 当前姿态
-            #     pos = env.robots[0].get_position()      # [x, y, z]
-            #     rpy = list(env.robots[0].get_rpy())    # [roll, pitch, yaw]
-            #     # 顺时针 45°（注意 PyBullet 的正 yaw 是逆时针，这里减号表示顺时针）
-            #     rpy[2] = rpy[2] - math.pi/4
-            #     # 直接“瞬移”到新的朝向（保持位置不变）
-            #     env.robots[0].set_rpy(rpy)
-            #     # 标记强制重新决策
-            #     IS_DECISION_FLAG = True
-            #     # 清空旧的 trajectory，保证下次规划使用新航向
-            #     trajectory = np.zeros((GOAL_POINT_NUM, 2))
-            #     # 跳过下面的 PD 控制，直接进入下一步循环
-            #     continue
+            if monitor.update(step):
+                print(f"Step {step}: Collision detected.")
+                # 当前姿态
+                pos = env.robots[0].get_position()      # [x, y, z]
+                rpy = list(env.robots[0].get_rpy())    # [roll, pitch, yaw]
+                # 顺时针 45°（注意 PyBullet 的正 yaw 是逆时针，这里减号表示顺时针）
+                rpy[2] = rpy[2] - math.pi/4
+                # 直接“瞬移”到新的朝向（保持位置不变）
+                env.robots[0].set_rpy(rpy)
+                # 标记强制重新决策
+                IS_DECISION_FLAG = True
+                # 清空旧的 trajectory，保证下次规划使用新航向
+                trajectory = np.zeros((GOAL_POINT_NUM, 2))
+                # 跳过下面的 PD 控制，直接进入下一步循环
+                continue
             
             # check if arrive
             if next_goal_point_idx == DECISION_GOAL_POINT_INDEX:
@@ -139,12 +126,6 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 # print(f"Robot arrived at the target position: {target_pos}.")
                 IS_DECISION_FLAG = True
 
-            # # check time interval for decision making
-            # if not IS_ARRIVE_FLAG and (time.time() - last_predict_time >= PREDICT_INTERVAL):
-            #     IS_DECISION_FLAG = True
-            #     next_goal_point_idx = 0
-            #     IS_ARRIVE_FLAG = False
-            #     print("over time decision")
 
             if IS_DECISION_FLAG:
                 last_predict_time = time.time()
