@@ -725,14 +725,12 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
     arrow_end_y = cur_pos_img[1] + arrow_length * np.sin(ori_angle)
     floorplan_ax.add_patch(FancyArrowPatch(cur_pos_img, (arrow_end_x, arrow_end_y), arrowstyle='->', mutation_scale=20, color='blue', linewidth=2, label='Orientation'))
 
-    # <<< MODIFIED: 修改绘图循环以反映碰撞 >>>
     if trajectory_img_coords is not None:
         for i, point in enumerate(trajectory_img_coords):
             lbl = 'Prediction' if i == 0 else None
             # 根据是否检测到碰撞来决定点的颜色
             color = 'red' if first_collision_index != -1 and i >= first_collision_index else 'cyan'
             floorplan_ax.add_patch(Circle(point, radius=0.2, color=color, alpha=0.8, label=lbl))
-    # <<< MODIFIED END >>>
             
     info_text = f"Global: pos({cur_pos[0]:.2f}, {cur_pos[1]:.2f})\nImage: pos({cur_pos_img[0]:.1f}, {cur_pos_img[1]:.1f})"
     floorplan_ax.text(0.02, 0.98, info_text, transform=floorplan_ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
@@ -859,16 +857,12 @@ def img_to_data_and_point_transfer(
 
     return resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize
 
-# 修改后的碰撞检测函数
 def check_collision_on_map(
     navigable_map: np.ndarray,
     trajectory_img_coords: np.ndarray,
     index: int
 ) -> bool:
-    """
-    【新】在给定地图上，检查“图像坐标”的轨迹是否碰撞。
-    职责更单一：只负责在地图上检查，不再关心坐标转换。
-    """
+
     map_height, map_width = navigable_map.shape[:2]
     check_up_to = min(index, len(trajectory_img_coords) - 1)
 

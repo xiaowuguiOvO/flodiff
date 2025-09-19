@@ -69,9 +69,8 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
         
         # collision
         collision_count = 0
-        monitor = CollisionMonitor(env.robots[0], normal_threshold=0.3, cooldown_steps=20)
+        # monitor = CollisionMonitor(env.robots[0], normal_threshold=0.3, cooldown_steps=20)
         for step in range(num_steps):
-
             # take action
             action = [0, 0]
             state, reward, done, info = env.step(action)
@@ -103,21 +102,21 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 )
             
             # check collision
-            if monitor.update(step):
-                print(f"Step {step}: Collision detected.")
-                # 当前姿态
-                pos = env.robots[0].get_position()      # [x, y, z]
-                rpy = list(env.robots[0].get_rpy())    # [roll, pitch, yaw]
-                # 顺时针 45°（注意 PyBullet 的正 yaw 是逆时针，这里减号表示顺时针）
-                rpy[2] = rpy[2] - math.pi/4
-                # 直接“瞬移”到新的朝向（保持位置不变）
-                env.robots[0].set_rpy(rpy)
-                # 标记强制重新决策
-                IS_DECISION_FLAG = True
-                # 清空旧的 trajectory，保证下次规划使用新航向
-                trajectory = np.zeros((GOAL_POINT_NUM, 2))
-                # 跳过下面的 PD 控制，直接进入下一步循环
-                continue
+            # if monitor.update(step):
+            #     print(f"Step {step}: Collision detected.")
+            #     # 当前姿态
+            #     pos = env.robots[0].get_position()      # [x, y, z]
+            #     rpy = list(env.robots[0].get_rpy())    # [roll, pitch, yaw]
+            #     # 顺时针 45°（注意 PyBullet 的正 yaw 是逆时针，这里减号表示顺时针）
+            #     rpy[2] = rpy[2] - math.pi/4
+            #     # 直接“瞬移”到新的朝向（保持位置不变）
+            #     env.robots[0].set_rpy(rpy)
+            #     # 标记强制重新决策
+            #     IS_DECISION_FLAG = True
+            #     # 清空旧的 trajectory，保证下次规划使用新航向
+            #     trajectory = np.zeros((GOAL_POINT_NUM, 2))
+            #     # 跳过下面的 PD 控制，直接进入下一步循环
+            #     continue
             
             # check if arrive
             if next_goal_point_idx == DECISION_GOAL_POINT_INDEX:
@@ -170,8 +169,34 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                     image_size=image_size,
                     navigable_map_image=navigable_map
                 )
+                
+                # collision_check
+                first_collision_index = -1  # 默认为-1，表示没有碰撞
+                nav_map_np_gray = np.array(navigable_map.convert('L'))
+                trajectory_img_coords = transform_trajectory_to_image_coords(actions_meter_global, floor_shapes_ori[scene_name], image_size)
+                if trajectory_img_coords is not None:
+                    map_height, map_width = nav_map_np_gray.shape[:2]
+                    for i, point in enumerate(trajectory_img_coords):
+                        px, py = int(round(point[0])), int(round(point[1]))
+                        # 检查是否越界
+                        if not (0 <= px < map_width and 0 <= py < map_height):
+                            first_collision_index = i
+                            break  # 越界即碰撞
+                        # 检查是否撞到障碍物 (非白色)
+                        pixel_value = nav_map_np_gray[py, px]
+                        if pixel_value < 255:
+                            first_collision_index = i
+                            break # 撞到障碍物
+                # if collision
+                if first_collision_index <= DECISION_GOAL_POINT_INDEX and first_collision_index != -1:
+                    print(f'Collision detected at episode {episode}, step {step}, trajectory index {first_collision_index}')            
+                    # replanning and rotation 45 degree
+                    IS_DECISION_FLAG = True
+                    collision_count += 1
+                    env.robots[0].set_rpy([0, 0, robot_yaw - math.pi/4])
+                    continue  
+                    
             # directly set robot to goal point
-            
             decision_goal_point = trajectory[DECISION_GOAL_POINT_INDEX]
             next_goal_point = trajectory[next_goal_point_idx]
             env.robots[0].set_position([next_goal_point[0], next_goal_point[1], FLOOR_Z])
@@ -179,10 +204,8 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
             # directly set robot yaw to the direction of next 8 point
             current_pos = next_goal_point
             look_at_idx = next_goal_point_idx + 8
-            # 安全检查，确保目标朝向点在轨迹范围内
             if look_at_idx < len(trajectory):
                 look_at_point = trajectory[look_at_idx]
-                # 计算从当前位置指向目标点的方向向量 [dx, dy]
                 direction_vector = look_at_point - current_pos
 
                 if np.linalg.norm(direction_vector) > 1e-6:
