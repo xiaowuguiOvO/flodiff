@@ -633,39 +633,34 @@ def transform_trajectory_to_image_coords(trajectory_global, ori_size, image_resi
     return trajectory_resized
 
 def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_resized, 
-                                        goal_pos_resized, cur_ori_resized, floorplan_image, 
-                                        navigable_map_image=None,
-                                        obs_image=None, predicted_action=None, trajectory_name=None, time_step=None, 
-                                        save_path=None, show_obs=True, floor_shapes_ori=None, 
-                                        scene_id=None, scene_floor=None, image_size=None):
+                                          goal_pos_resized, cur_ori_resized, floorplan_image, 
+                                          navigable_map_image=None,
+                                          obs_image=None, predicted_action=None, trajectory_name=None, time_step=None, 
+                                          save_path=None, show_obs=True, floor_shapes_ori=None, 
+                                          scene_id=None, scene_floor=None, image_size=None):
     """
     可视化机器人推理过程，可同时显示 floorplan 和 navigable map。
+    如果发生碰撞，则将碰撞点及之后的轨迹点标为红色。
     """
     scene_name = f"{scene_id}_{scene_floor}"
-    
     has_nav_map = navigable_map_image is not None
     
-    # --- 1. 创建子图布局 ---
+    # --- 1. 创建子图布局 (无变化) ---
     if show_obs and obs_image is not None:
-        # 如果显示观测图，创建一个 2x3 的网格
-        # axes[0,0] 用于 floorplan, axes[0,1] 用于 navigable_map
         fig, axes = plt.subplots(2, 3, figsize=(18, 12))
         floorplan_ax = axes[0, 0]
-        nav_ax = axes[0, 1] if has_nav_map else None # 如果有nav map，则指定它的绘图区
+        nav_ax = axes[0, 1] if has_nav_map else None
     else:
-        # 如果不显示观测图，根据地图数量创建 1x1 或 1x2 的网格
         num_maps = 2 if has_nav_map else 1
         fig, axes = plt.subplots(1, num_maps, figsize=(9 * num_maps, 8))
         if num_maps == 1:
-            floorplan_ax = axes
-            nav_ax = None
+            floorplan_ax, nav_ax = axes, None
         else:
-            floorplan_ax = axes[0]
-            nav_ax = axes[1]
+            floorplan_ax, nav_ax = axes[0], axes[1]
 
     fig.suptitle(f'Robot Inference Visualization - {trajectory_name} - Step {time_step}', fontsize=16)
     
-    # --- 预处理坐标和轨迹 (只计算一次) ---
+    # --- 预处理坐标、轨迹和地图 ---
     cur_pos_img = cur_pos_resized
     goal_pos_img = goal_pos_resized
     
@@ -674,8 +669,44 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
         action_np = predicted_action.cpu().numpy() if isinstance(predicted_action, torch.Tensor) else np.array(predicted_action)
         trajectory_img_coords = transform_trajectory_to_image_coords(action_np, floor_shapes_ori[scene_name], image_size)
 
+    # 为了碰撞检测和绘图，提前处理 navigable_map
+    nav_map_np = None
+    if has_nav_map:
+        if isinstance(navigable_map_image, torch.Tensor):
+            if navigable_map_image.dim() == 4: nav_map_np = navigable_map_image[0].permute(1, 2, 0).cpu().numpy()
+            elif navigable_map_image.dim() == 3: nav_map_np = navigable_map_image.permute(1, 2, 0).cpu().numpy()
+            else: nav_map_np = navigable_map_image.cpu().numpy()
+        else:
+            nav_map_np = np.array(navigable_map_image)
+        if nav_map_np.max() > 1.0: nav_map_np = nav_map_np / 255.0
+        # 如果是RGB图，转为灰度值用于碰撞检测
+        if nav_map_np.ndim == 3 and nav_map_np.shape[2] == 3:
+             nav_map_np_gray = (nav_map_np * 255).astype(np.uint8)
+             nav_map_np_gray = np.dot(nav_map_np_gray[...,:3], [0.2989, 0.5870, 0.1140])
+        else:
+             nav_map_np_gray = (nav_map_np * 255).astype(np.uint8)
+
+
+    # <<< MODIFIED: 在这里添加碰撞检测逻辑 >>>
+    first_collision_index = -1  # 默认为-1，表示没有碰撞
+    if has_nav_map and trajectory_img_coords is not None:
+        map_height, map_width = nav_map_np_gray.shape[:2]
+        for i, point in enumerate(trajectory_img_coords):
+            px, py = int(round(point[0])), int(round(point[1]))
+
+            # 检查是否越界
+            if not (0 <= px < map_width and 0 <= py < map_height):
+                first_collision_index = i
+                break  # 越界即碰撞
+
+            # 检查是否撞到障碍物 (非白色)
+            pixel_value = nav_map_np_gray[py, px]
+            if pixel_value < 255:
+                first_collision_index = i
+                break # 撞到障碍物
+    # <<< MODIFIED END >>>
+
     # --- 2. 处理和绘制 Floorplan Map ---
-    # a. 处理图像
     if isinstance(floorplan_image, torch.Tensor):
         if floorplan_image.dim() == 4: floorplan_np = floorplan_image[0].permute(1, 2, 0).cpu().numpy()
         elif floorplan_image.dim() == 3: floorplan_np = floorplan_image.permute(1, 2, 0).cpu().numpy()
@@ -684,7 +715,6 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
         floorplan_np = np.array(floorplan_image)
     if floorplan_np.max() > 1.0: floorplan_np = floorplan_np / 255.0
     
-    # b. 在 floorplan_ax 上绘制所有元素
     floorplan_ax.imshow(floorplan_np)
     floorplan_ax.add_patch(Circle(cur_pos_img, radius=2, color='green', alpha=0.8, label='Current'))
     floorplan_ax.add_patch(Circle(goal_pos_img, radius=2, color='red', alpha=0.8, label='Goal'))
@@ -695,10 +725,14 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
     arrow_end_y = cur_pos_img[1] + arrow_length * np.sin(ori_angle)
     floorplan_ax.add_patch(FancyArrowPatch(cur_pos_img, (arrow_end_x, arrow_end_y), arrowstyle='->', mutation_scale=20, color='blue', linewidth=2, label='Orientation'))
 
+    # <<< MODIFIED: 修改绘图循环以反映碰撞 >>>
     if trajectory_img_coords is not None:
         for i, point in enumerate(trajectory_img_coords):
             lbl = 'Prediction' if i == 0 else None
-            floorplan_ax.add_patch(Circle(point, radius=0.2, color='cyan', alpha=0.8, label=lbl))
+            # 根据是否检测到碰撞来决定点的颜色
+            color = 'red' if first_collision_index != -1 and i >= first_collision_index else 'cyan'
+            floorplan_ax.add_patch(Circle(point, radius=0.2, color=color, alpha=0.8, label=lbl))
+    # <<< MODIFIED END >>>
             
     info_text = f"Global: pos({cur_pos[0]:.2f}, {cur_pos[1]:.2f})\nImage: pos({cur_pos_img[0]:.1f}, {cur_pos_img[1]:.1f})"
     floorplan_ax.text(0.02, 0.98, info_text, transform=floorplan_ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
@@ -707,72 +741,50 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
     floorplan_ax.axis('off')
     floorplan_ax.legend()
 
-    # --- 3. 处理和绘制 Navigable Map (如果存在) ---
+    # --- 3. 处理和绘制 Navigable Map ---
     if has_nav_map and nav_ax is not None:
-        # a. 处理图像 (逻辑和上面完全一样)
-        if isinstance(navigable_map_image, torch.Tensor):
-            if navigable_map_image.dim() == 4: nav_map_np = navigable_map_image[0].permute(1, 2, 0).cpu().numpy()
-            elif navigable_map_image.dim() == 3: nav_map_np = navigable_map_image.permute(1, 2, 0).cpu().numpy()
-            else: nav_map_np = navigable_map_image.cpu().numpy()
-        else:
-            nav_map_np = np.array(navigable_map_image)
-        if nav_map_np.max() > 1.0: nav_map_np = nav_map_np / 255.0
-
-        # b. 在 nav_ax 上绘制所有元素 (逻辑和上面完全一样)
         nav_ax.imshow(nav_map_np, cmap='gray')
         nav_ax.add_patch(Circle(cur_pos_img, radius=2, color='green', alpha=0.8, label='Current'))
         nav_ax.add_patch(Circle(goal_pos_img, radius=2, color='red', alpha=0.8, label='Goal'))
         nav_ax.add_patch(FancyArrowPatch(cur_pos_img, (arrow_end_x, arrow_end_y), arrowstyle='->', mutation_scale=20, color='blue', linewidth=2, label='Orientation'))
 
+        # <<< MODIFIED: 同样修改此处的绘图循环 >>>
         if trajectory_img_coords is not None:
             for i, point in enumerate(trajectory_img_coords):
                 lbl = 'Prediction' if i == 0 else None
-                nav_ax.add_patch(Circle(point, radius=0.2, color='cyan', alpha=0.8, label=lbl))
+                # 使用相同的逻辑决定颜色
+                color = 'red' if first_collision_index != -1 and i >= first_collision_index else 'cyan'
+                nav_ax.add_patch(Circle(point, radius=0.2, color=color, alpha=0.8, label=lbl))
+        # <<< MODIFIED END >>>
 
         nav_ax.text(0.02, 0.98, info_text, transform=nav_ax.transAxes, fontsize=10, verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-
         nav_ax.set_title('Navigable Map View')
         nav_ax.axis('off')
         nav_ax.legend()
     
-    # --- 4. 显示观测图像序列 ---
+    # --- 4. 显示观测图像序列 (无变化) ---
     if show_obs and obs_image is not None:
+        # ... (此部分代码无须修改) ...
         obs_stack = torch.stack(obs_image, dim=0)
         obs_np_all = obs_stack.cpu().numpy()
-        
-        # 定义 obs 的显示位置，避开地图用的位置
         positions = [(0, 2), (1, 0), (1, 1), (1, 2)] 
-        # 如果 navigable map 不存在，可以多用一个位置
         if not has_nav_map:
             positions.insert(0, (0, 1))
-
         context_size = min(obs_np_all.shape[0], len(positions))
-        
         for i in range(context_size):
             row, col = positions[i]
-            ax = axes[row, col]
+            ax = axes[row, col] if (show_obs and obs_image is not None and (isinstance(axes, np.ndarray) and axes.ndim > 1)) else axes
             obs_img = obs_np_all[i].transpose(1, 2, 0)
             if obs_img.max() > 1.0: obs_img /= 255.0
             ax.imshow(obs_img)
             ax.set_title(f'Observation t-{context_size-1-i}')
             ax.axis('off')
-            
-        # 隐藏所有未使用的子图
-        all_used_axes = {floorplan_ax}
-        if nav_ax: all_used_axes.add(nav_ax)
-        for i in range(context_size):
-            all_used_axes.add(axes[positions[i][0], positions[i][1]])
-        
-        for ax in axes.flatten():
-            if ax not in all_used_axes:
-                ax.axis('off')
 
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     
     # --- 5. 保存或显示 ---
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        # print(f"Visualization saved to {save_path}")
     else:
         plt.show()
     
@@ -847,3 +859,28 @@ def img_to_data_and_point_transfer(
 
     return resize_img, cur_pos_in_resizeSize, goal_pos_in_resizeSize, cur_ori_in_resizeSize
 
+# 修改后的碰撞检测函数
+def check_collision_on_map(
+    navigable_map: np.ndarray,
+    trajectory_img_coords: np.ndarray,
+    index: int
+) -> bool:
+    """
+    【新】在给定地图上，检查“图像坐标”的轨迹是否碰撞。
+    职责更单一：只负责在地图上检查，不再关心坐标转换。
+    """
+    map_height, map_width = navigable_map.shape[:2]
+    check_up_to = min(index, len(trajectory_img_coords) - 1)
+
+    for i in range(check_up_to + 1):
+        point = trajectory_img_coords[i]
+        px, py = int(round(point[0])), int(round(point[1]))
+
+        if not (0 <= px < map_width and 0 <= py < map_height):
+            return True # 越界碰撞
+
+        pixel_value = navigable_map[py, px] if navigable_map.ndim == 2 else navigable_map[py, px, 0]
+        if pixel_value < 255:
+            return True # 障碍物碰撞
+
+    return False
