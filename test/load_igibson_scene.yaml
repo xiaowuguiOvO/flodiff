@@ -62,10 +62,9 @@ output: [task_obs, rgb, depth]
 # image
 # Intel Realsense Depth Camera D435
 # https://store.intelrealsense.com/buy-intel-realsense-depth-camera-d435.html
-fisheye: false
 image_width: 512
 image_height: 512
-vertical_fov: 45
+vertical_fov: 90
 # depth
 depth_low : 0.1
 depth_high: 10.0
