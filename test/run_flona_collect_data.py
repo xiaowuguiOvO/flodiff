@@ -114,7 +114,6 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                         floor_data.append(float(line))
                 floor_data.sort()
                 FLOOR_Z = floor_data[scene_floor_num]
-                print(FLOOR_Z)
                 # set robot init pos and goal pos
                 env.robots[0].set_position([traj_robot_init_pos[0], traj_robot_init_pos[1], FLOOR_Z])
                 env.task.target_pos = np.array([traj_goal_pos[0], traj_goal_pos[1], FLOOR_Z])
