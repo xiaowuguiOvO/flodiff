@@ -3,7 +3,7 @@ import os
 import numpy as np
 class DataCollector:
     """一个用于在仿真中采集和保存轨迹数据的类。"""
-    def __init__(self, save_dir, scene_id, floor_num, episode_num):
+    def __init__(self, save_dir, scene_id, floor_num, episode_num, traj_name):
         """
         初始化采集器。
 
@@ -19,13 +19,14 @@ class DataCollector:
         # 构建符合评估脚本要求的文件名
         # 注意：这里的 'traj_name' 是示例，您可能需要根据实际任务替换
         scene_floor = f"{scene_id}_{floor_num}"
-        traj_name = f"episode_{episode_num}" # 使用 episode 编号作为轨迹名
+        # traj_name = f"episode_{episode_num}" # 使用 episode 编号作为轨迹名
+        
         
         # 确保场景和轨迹的子目录存在
         self.output_dir = os.path.join(self.save_dir)
-        # os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
         
-        self.output_path = os.path.join(self.output_dir, f"{traj_name}.txt")
+        self.output_path = os.path.join(self.output_dir, f"{scene_floor}_{traj_name}.txt")
 
     def collect_step_data(self, robot_pos, ref_point, is_collision):
         """

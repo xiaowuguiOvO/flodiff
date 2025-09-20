@@ -1,7 +1,7 @@
 # scene
 scene: gibson
 # scene_id: Albertville
-scene_id: Eudora
+scene_id: Roane
 floor_num: 0
 scene_path: iGibson/igibson/data/g_dataset/
 trav_folder: datasets/trav_maps
@@ -50,7 +50,7 @@ collision_reward_weight: -0.1
 discount_factor: 0.99
 
 # termination condition
-dist_tol: 1  # body width
+dist_tol: 0.1
 max_collisions_allowed: 500
 max_step: 3000
 # misc config

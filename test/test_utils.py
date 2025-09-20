@@ -701,7 +701,7 @@ def visualize_robot_inference_with_coords(cur_pos, goal_pos, cur_ori, cur_pos_re
 
             # 检查是否撞到障碍物 (非白色)
             pixel_value = nav_map_np_gray[py, px]
-            if pixel_value < 255:
+            if pixel_value == 0:
                 first_collision_index = i
                 break # 撞到障碍物
     # <<< MODIFIED END >>>

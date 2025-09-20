@@ -15,6 +15,7 @@ def judge_success(data, distance_th_times, collision_th, suc_dis, shortest_traj)
     cul_dis = 0   
     for i,d in enumerate(data):
         d_t = np.linalg.norm(d[:2] - goal)
+        # print(d_t)
         if i > 0:
             cul_dis += np.linalg.norm(d[:2] - data[i-1][:2])
         if collision_num >= collision_th:
@@ -26,7 +27,7 @@ def judge_success(data, distance_th_times, collision_th, suc_dis, shortest_traj)
             break
     return arrive, collision_num, shortest_dis, cul_dis, d_0, d_t
 
-traj_dir = '/path/to/flodiff/dataset/scenes_117/test/'
+traj_dir = 'datasets/scenes_117/test/'
 distance_th_times = 3
 collision_th = [1, 10, 30, 50, 5000]
 suc_dis = [0.25, 0.3, 0.35, 0.4]
@@ -36,7 +37,7 @@ for c_th in collision_th:
         print('-------------------------------------')
         print('collision count th:', c_th, 'arrive th:', s_dis)
 
-        data_dir = os.path.join('/path/to/flodiff/results/exp_1')
+        data_dir = os.path.join('results/res')
         arrives = []
         collision_nums = []
         shortest_diss = []
