@@ -15,5 +15,5 @@ iGibson/igibson/data/
 flona.yaml
 logs/
 wandb/
-viusalization_sim/
+visualization_sim/
 visualization_test/
