@@ -14,15 +14,23 @@ import torch.backends.cudnn as cudnn
 from warmup_scheduler import GradualWarmupScheduler
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 
+# --- 1. 导入 Accelerator ---
+from accelerate import Accelerator
+
 from model.flona import flona, DenseNetwork
 from model.flona_vint import flona_ViNT, replace_bn_with_gn
 from diffusion_policy.diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from model.flona_dataset import flona_Dataset
 from train_eval_loop import train_eval_loop_flona, load_model
 
+
 def main(config):
-    
+    # --- 2. 初始化 Accelerator ---
+    # 这应该是函数的第一行，它会自动处理所有设备设置
+    accelerator = Accelerator()
+
     # ==============================Dataset==============================
+    # 数据集部分代码完全不用变
     data_config = config["datasets"]
     train_dataset = flona_Dataset(
         data_folder=os.path.join(data_config["data_folder"], "train"),
@@ -66,6 +74,7 @@ def main(config):
     )
 
     # ==============================Model==============================
+    # 模型定义部分完全不用变
     vision_encoder = flona_ViNT(
         obs_encoding_size=config["encoding_size"],
         context_size=config["context_size"],
@@ -76,11 +85,11 @@ def main(config):
     vision_encoder = replace_bn_with_gn(vision_encoder)
     noise_pred_net = ConditionalUnet1D(
             input_dim=2,
-            global_cond_dim=config["encoding_size"],    # +6
+            global_cond_dim=config["encoding_size"],
             down_dims=config["down_dims"],
             cond_predict_scale=config["cond_predict_scale"],
         )
-    dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])   # +6
+    dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
     model = flona(
         vision_encoder=vision_encoder,
         noise_pred_net=noise_pred_net,
@@ -94,22 +103,11 @@ def main(config):
     )
 
     # ==============================Training Configuration==============================
-    torch.cuda.empty_cache()
-    if torch.cuda.is_available():
-        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        if "gpu_ids" not in config:
-            config["gpu_ids"] = [0]
-        elif type(config["gpu_ids"]) == int:
-            config["gpu_ids"] = [config["gpu_ids"]]
-        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(x) for x in config["gpu_ids"]])
-        print("Using cuda devices:", os.environ["CUDA_VISIBLE_DEVICES"])
-    else:
-        print("Using cpu")
-
-    first_gpu_id = config["gpu_ids"][0]
-    device = torch.device(
-        f"cuda:{first_gpu_id}" if torch.cuda.is_available() else "cpu"
-    )
+    
+    # --- 3. 删除了所有手动的设备管理代码 ---
+    # 之前关于 os.environ, device, DataParallel 的代码块已被完全移除
+    # accelerator 会自动处理这一切
+    
     if "seed" in config:
         np.random.seed(config["seed"])
         torch.manual_seed(config["seed"])
@@ -121,11 +119,9 @@ def main(config):
     ])
     transform = transforms.Compose(transform)
     lr = float(config["lr"])
-    config["optimizer"] = config["optimizer"].lower()
     
     optimizer = AdamW(model.parameters(), lr=lr)
-    scheduler = None
-  
+    
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer, T_max=config["epochs"]
             )
@@ -137,29 +133,36 @@ def main(config):
             total_epoch=config["warmup_epochs"],
             after_scheduler=scheduler,
         )
-    current_epoch = 0    
+    current_epoch = 0
 
+    # checkpoint 加载逻辑，需要在 prepare 之前完成对 model 的加载
     if "load_run" in config:
         load_project_folder = os.path.join("logs", config["load_run"])
-        print("Loading model from ", load_project_folder)
+        accelerator.print(f"Loading model from {load_project_folder}")
         latest_path = os.path.join(load_project_folder, "latest.pth")
-        latest_checkpoint = torch.load(latest_path) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
+        
+        # 加载时指定 map_location，以防 checkpoint 是在不同设备上保存的
+        latest_checkpoint = torch.load(latest_path, map_location='cpu') 
         load_model(model, latest_checkpoint)
         if "epoch" in latest_checkpoint:
             current_epoch = latest_checkpoint["epoch"] + 1
 
-    # Multi-GPU
-    if len(config["gpu_ids"]) > 1:
-        model = nn.DataParallel(model, device_ids=config["gpu_ids"])
-    model = model.to(device)
-
-    if "load_run" in config:  # load optimizer and scheduler after data parallel
+    # --- 4. 使用 accelerator.prepare() 包装所有核心组件 ---
+    # 这是最关键的一步，它会自动处理模型和数据的设备移动
+    model, optimizer, scheduler, train_loader, test_dataloader = accelerator.prepare(
+        model, optimizer, scheduler, train_loader, test_dataloader
+    )
+    
+    # 在 prepare 之后加载 optimizer 和 scheduler 的状态
+    if "load_run" in config:  
         if "optimizer" in latest_checkpoint:
-            optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict())
+            optimizer.load_state_dict(latest_checkpoint["optimizer"])
         if scheduler is not None and "scheduler" in latest_checkpoint:
-            scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
-
+            scheduler.load_state_dict(latest_checkpoint["scheduler"])
+            
     # ==============================Train==============================
+    # --- 5. 修改 train_eval_loop_flona 的调用 ---
+    # 删除了 device 参数，并传入了 accelerator
     train_eval_loop_flona(
         train_model=config["train"],
         model=model,
@@ -170,7 +173,7 @@ def main(config):
         test_loader=test_dataloader,
         transform=transform,
         epochs=config["epochs"],
-        device=device,
+        accelerator=accelerator,  # <--- 传入 accelerator
         project_folder=config["project_folder"],
         print_log_freq=config["print_log_freq"],
         swanlab_log_freq=config["swanlab_log_freq"],
@@ -183,13 +186,12 @@ def main(config):
         eval_freq=config["eval_freq"],
     )
 
-    print("Done!!!")
+    accelerator.print("Done!!!")
 
 
 if __name__ == "__main__":
-
+    # 这部分代码完全不用变
     parser = argparse.ArgumentParser(description="Visual Navigation Transformer")
-    # project setup
     parser.add_argument(
         "--config",
         "-c",
@@ -205,17 +207,15 @@ if __name__ == "__main__":
         "logs", config["project_name"], config["run_name"]
     )
     os.makedirs(
-        config["project_folder"],  # should error if dir already exists to avoid overwriting and old project
+        config["project_folder"],
     )
     if config["use_swanlab"]:
         swanlab.login()
         swanlab.init(
             project=config["project_name"],
-            settings=swanlab.Settings(start_method="thread"),          
+            settings=swanlab.Settings(start_method="thread"),
         )
-        # swanlab.save(args.config, policy="now")  # save the config file
         swanlab.run.name = config["run_name"]
-        # update the swanlab args with the training configurations
         if swanlab.run:
             swanlab.config.update(config)
 

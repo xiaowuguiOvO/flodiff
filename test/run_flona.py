@@ -129,7 +129,11 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
             if IS_DECISION_FLAG:
                 last_predict_time = time.time()
                 # predict
+                t1 = time.time()
                 output = agent.get_action(agent.obs_img_queue, agent.floorplan_img, agent.obs_pos, agent.goal_pos, agent.obs_ori, MATRIX_WAYPOINT_SPACING, WAYPOINT_SPACING)
+                t2 = time.time()
+                print(t2 - t1)
+                
                 actions = output["actions"].mean(dim=0)
                 # print(actions.shape)
                 actions_normed_global = to_global_coords(actions.cpu().numpy(), agent.obs_pos, agent.obs_ori)
@@ -148,27 +152,27 @@ def main(headless=False, num_episodes=10, num_steps=200, scene_config_path=None,
                 navigable_map_path = os.path.join(f"iGibson/igibson/data/g_dataset/{scene_config['scene_id']}", f"floor_trav_{scene_config['floor_num']}_v3.png")
                 navigable_map = Image.open(navigable_map_path)
                 navigable_map = navigable_map.resize((96, 96))
-                visualize_robot_inference_with_coords(
-                    cur_pos=agent.obs_pos,
-                    goal_pos=agent.goal_pos,
-                    cur_ori=agent.obs_ori,
-                    cur_pos_resized=cur_pos_resize,
-                    goal_pos_resized=goal_pos_resize,
-                    cur_ori_resized=cur_ori_resize,
-                    floorplan_image=floorplan_img_resize,
-                    obs_image=agent.obs_img_queue,
-                    predicted_action=actions_meter_global,
-                    trajectory_name=f'traj_{step}',
-                    time_step=step,
-                    save_path=os.path.join(viz_dir, f"episode_{episode}, inference_step_{step}.png"),
-                    show_obs=True,
-                    # cur_shortest_path=cur_shortest_path_xy,
-                    floor_shapes_ori=floor_shapes_ori,
-                    scene_id=scene_config["scene_id"],
-                    scene_floor=scene_config["floor_num"],
-                    image_size=image_size,
-                    navigable_map_image=navigable_map
-                )
+                # visualize_robot_inference_with_coords(
+                #     cur_pos=agent.obs_pos,
+                #     goal_pos=agent.goal_pos,
+                #     cur_ori=agent.obs_ori,
+                #     cur_pos_resized=cur_pos_resize,
+                #     goal_pos_resized=goal_pos_resize,
+                #     cur_ori_resized=cur_ori_resize,
+                #     floorplan_image=floorplan_img_resize,
+                #     obs_image=agent.obs_img_queue,
+                #     predicted_action=actions_meter_global,
+                #     trajectory_name=f'traj_{step}',
+                #     time_step=step,
+                #     save_path=os.path.join(viz_dir, f"episode_{episode}, inference_step_{step}.png"),
+                #     show_obs=True,
+                #     # cur_shortest_path=cur_shortest_path_xy,
+                #     floor_shapes_ori=floor_shapes_ori,
+                #     scene_id=scene_config["scene_id"],
+                #     scene_floor=scene_config["floor_num"],
+                #     image_size=image_size,
+                #     navigable_map_image=navigable_map
+                # )
                 
                 # collision_check
                 first_collision_index = -1  # 默认为-1，表示没有碰撞

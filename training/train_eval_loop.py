@@ -5,13 +5,17 @@ import swanlab
 import numpy as np
 import torch
 import torch.nn as nn
-# import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from torchvision import transforms
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.training_utils import EMAModel
 from training.train_utils import train_flona, evaluate_flona
+
+# --- 新增 ---
+# 导入 Accelerator 用于类型提示
+from accelerate import Accelerator
+
 
 def train_eval_loop_flona(
     train_model: bool,
@@ -23,7 +27,7 @@ def train_eval_loop_flona(
     test_loader: DataLoader,
     transform: transforms,
     epochs: int,
-    device: torch.device,
+    accelerator: Accelerator,
     project_folder: str,
     print_log_freq: int = 100,
     swanlab_log_freq: int = 10,
@@ -36,45 +40,28 @@ def train_eval_loop_flona(
     eval_freq: int = 1,
 ):
     """
-    Train and evaluate the model for several epochs
-    Args:
-        train_model: train or eval model
-        model: model to train
-        optimizer: optimizer to use
-        lr_scheduler: learning rate scheduler to use
-        noise_scheduler: noise scheduler to use
-        dataloader: dataloader for train dataset
-        test_dataloaders: dict of dataloaders for testing
-        transform: transform to apply to images
-        epochs: number of epochs to train
-        device: device to train on
-        project_folder: folder to save checkpoints and logs
-        swanlab_log_freq: frequency of logging to swanlab
-        print_log_freq: frequency of printing to console
-        image_log_freq: frequency of logging images to swanlab
-        num_images_log: number of images to log to swanlab
-        current_epoch: epoch to start training from
-        alpha: tradeoff between distance and action loss
-        use_swanlab: whether to log to swanlab or not
-        eval_fraction: fraction of training data to use for evaluation
-        eval_freq: frequency of evaluation
+    使用 accelerate 来训练和评估模型
     """
-    # ==============================Train==============================
-    latest_path = os.path.join(project_folder, f"latest.pth")
-    ema_model = EMAModel(model=model, power=0.75)
+    # ==============================训练==============================
+    # EMA 模型应该使用未包装的原始模型来初始化
+    ema_model = EMAModel(model=accelerator.unwrap_model(model), power=0.75)
     
     for epoch in range(current_epoch, current_epoch + epochs):
         if train_model:
-            print(
-            f"Start flona Training Epoch {epoch}/{current_epoch + epochs - 1}"
+            # --- 修改 ---
+            # 使用 accelerator.print 来避免在多卡环境下重复打印日志
+            accelerator.print(
+                f"开始 Flona 训练 - Epoch {epoch}/{current_epoch + epochs - 1}"
             )
             train_flona(
-                model=model,
+                model=model, # 传入由 accelerator 包装过的模型
                 ema_model=ema_model,
                 optimizer=optimizer,
                 dataloader=train_loader,
                 transform=transform,
-                device=device,
+                # --- 修改 ---
+                # 传入 accelerator 对象，替代 device
+                accelerator=accelerator,
                 noise_scheduler=noise_scheduler,
                 project_folder=project_folder,
                 epoch=epoch,
@@ -85,39 +72,48 @@ def train_eval_loop_flona(
                 use_swanlab=use_swanlab,
                 alpha=alpha,
             )
-            lr_scheduler.step()
+        
+        # --- 新增 ---
+        # 使用 barrier (屏障)，确保所有进程都完成了训练步骤再进行保存
+        accelerator.wait_for_everyone()
 
-        numbered_path = os.path.join(project_folder, f"ema_{epoch}.pth")
-        torch.save(ema_model.averaged_model.state_dict(), numbered_path)
-        numbered_path = os.path.join(project_folder, f"ema_latest.pth")
-        print(f"Saved EMA model to {numbered_path}")
+        # --- 修改 ---
+        # 所有的保存和日志记录操作都只应由主进程执行
+        if accelerator.is_main_process:
+            # 使用 unwrap_model 来获取原始模型，而不是分布式包装器
+            unwrapped_model = accelerator.unwrap_model(model)
 
-        numbered_path = os.path.join(project_folder, f"{epoch}.pth")
-        torch.save(model.state_dict(), numbered_path)
-        torch.save(model.state_dict(), latest_path)
-        print(f"Saved model to {numbered_path}")
+            # 将所有状态整合到一个 checkpoint 文件中，方便管理
+            checkpoint_to_save = {
+                'epoch': epoch,
+                'model': unwrapped_model.state_dict(),
+                'ema_model': ema_model.averaged_model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'scheduler': lr_scheduler.state_dict()
+            }
+            
+            # 保存整合后的 checkpoint
+            latest_path = os.path.join(project_folder, "latest.pth")
+            numbered_path = os.path.join(project_folder, f"checkpoint_{epoch}.pth")
+            
+            torch.save(checkpoint_to_save, latest_path)
+            torch.save(checkpoint_to_save, numbered_path)
 
-        # save optimizer
-        numbered_path = os.path.join(project_folder, f"optimizer_{epoch}.pth")
-        latest_optimizer_path = os.path.join(project_folder, f"optimizer_latest.pth")
-        torch.save(optimizer.state_dict(), latest_optimizer_path)
+            accelerator.print(f"已保存 checkpoint 至: {numbered_path}")
 
-        # save scheduler
-        numbered_path = os.path.join(project_folder, f"scheduler_{epoch}.pth")
-        latest_scheduler_path = os.path.join(project_folder, f"scheduler_latest.pth")
-        torch.save(lr_scheduler.state_dict(), latest_scheduler_path)
-
-        #==============================Eval==============================
+        #==============================评估==============================
         if (epoch + 1) % eval_freq == 0: 
-            print(
-                f"Start flona Testing Epoch {epoch}/{current_epoch + epochs - 1}"
+            accelerator.print(
+                f"开始 Flona 评估 - Epoch {epoch}/{current_epoch + epochs - 1}"
             )
             loader = test_loader
             evaluate_flona(
                 ema_model=ema_model,
                 dataloader=loader,
                 transform=transform,
-                device=device,
+                # --- 修改 ---
+                # 传入 accelerator 对象，替代 device
+                accelerator=accelerator,
                 noise_scheduler=noise_scheduler,
                 project_folder=project_folder,
                 epoch=epoch,
@@ -127,25 +123,29 @@ def train_eval_loop_flona(
                 use_swanlab=use_swanlab,
                 eval_fraction=eval_fraction,
             )
-        swanlab.log({
-            "lr": optimizer.param_groups[0]["lr"],
-        }, commit=False)
-
+        
+        # 在所有进程上同步更新学习率调度器
         if lr_scheduler is not None:
             lr_scheduler.step()
 
-        # log average eval loss
-        swanlab.log({}, commit=False)
+        # --- 修改 ---
+        # 只在主进程上记录日志
+        if accelerator.is_main_process and use_swanlab:
+            swanlab.log({
+                "epoch": epoch,
+                "lr": optimizer.param_groups[0]["lr"],
+            })
+    
+    if accelerator.is_main_process and use_swanlab:
+        swanlab.log({})
+    
+    accelerator.print("\n训练和评估循环结束。")
 
-        swanlab.log({
-            "lr": optimizer.param_groups[0]["lr"],
-        }, commit=False)
-       
-    # Flush the last set of eval logs
-    swanlab.log({})
-    print()
 
 def load_model(model, checkpoint: dict) -> None:
-    """Load model from checkpoint."""
-    state_dict = checkpoint
-    model.load_state_dict(state_dict, strict=False)
+    """从 checkpoint 中加载模型状态。"""
+    # 这个函数是正确的，因为它在 accelerator.prepare() 之前被调用，
+    # 将权重加载到原始模型中。
+    # 为了更稳健，我们优先从 'model' 键加载，如果不存在，则加载整个字典。
+    model_state_dict = checkpoint.get('model', checkpoint)
+    model.load_state_dict(model_state_dict, strict=False)
